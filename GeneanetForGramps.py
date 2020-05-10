@@ -67,11 +67,11 @@ from gramps.cli.grampscli import CLIManager
         #Date, DateError, Event, EventRef, EventRoleType, EventType,
         #Family, FamilyRelType, Name, NameType, Note, Person, PersonRef,
         #Place, Source, LdsOrd)
-from gramps.gen.lib import Person, Name, Surname
+from gramps.gen.lib import Person, Name, Surname, NameType
 
 LOG = logging.getLogger("geneanetforgedcom")
 
-GENDER = ['F', 'M', 'I']
+GENDER = ['F', 'H', 'I']
 TRAN = None
 
 # Events we manage
@@ -105,8 +105,7 @@ import argparse
 from datetime import datetime
 
 ROOTURL = 'https://gw.geneanet.org/'
-LEVELA = 0
-LEVELC = 0
+LEVEL = 0
 headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
 parser = argparse.ArgumentParser(description="Import Geneanet subtrees into Gramps")
@@ -122,7 +121,7 @@ parser.add_argument("searchedperson", type=str, nargs='?', help="Url of the pers
 args = parser.parse_args()
 
 if args.verbosity >= 1:
-    print("LEVEL:",LEVELA)
+    print("LEVEL:",LEVEL)
 #person = 'agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
 if args.searchedperson == None:
     purl = 'agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
@@ -307,20 +306,54 @@ class GPerson():
         self.deathplacecode = None
         self.pref = []
         self.gid = None
+        self.url = None
         self.family = []
 
-    def copy(self,p):
+    def __smartcopy(self,p,attr):
+        '''
+        Smart Copying an attribute from p into self
+        '''
         if args.verbosity >= 2:
-            print("Copying Person")
-        self.firstname = p.firstname
-        self.lastname = p.lastname
-        self.sex = p.sex
-        self.birth = p.birth
-        self.birthplace = p.birthplace
-        self.birthplacecode = p.birthplacecode
-        self.death = p.death
-        self.deathplace = p.deathplace
-        self.deathplacecode = p.deathplacecode
+            print("Smart Copying Attributes",attr)
+
+        # By default do not copy
+        scopy = False
+
+        # Find the case where copy is to be done
+        # Nothing yet
+        if not self.__dict__[attr]:
+            scopy = True
+
+        # Force the copy
+        if self.__dict__[attr] != p.__dict__[attr] and args.force:
+            scopy = True
+
+        # Improve sex if we can
+        if attr == 'sex' and self.__dict__[attr] == 'I':
+            scopy = True
+
+        if scopy:
+            self.__dict__[attr] = p.__dict__[attr]
+        else:
+            print("Not Copying Person attribute (%s, value %s) onto %s"%(attr, self.__dict__[attr],p.__dict__[attr]))
+
+    def smartcopy(self,p):
+        '''
+        Smart Copying p into self
+        '''
+        if args.verbosity >= 2:
+            print("Smart Copying Person")
+        self.__smartcopy(p,"firstname")
+        self.__smartcopy(p,"lastname")
+        self.__smartcopy(p,"sex")
+        self.__smartcopy(p,"url")
+        self.__smartcopy(p,"birth")
+        self.__smartcopy(p,"birthplace")
+        self.__smartcopy(p,"birthplacecode")
+        self.__smartcopy(p,"death")
+        self.__smartcopy(p,"deathplace")
+        self.__smartcopy(p,"deathplacecode")
+        # Does it work ?
         self.pref = p.pref
         self.family = p.family
 
@@ -329,6 +362,8 @@ class GPerson():
         Used example from https://gist.github.com/IanHopkinson/ad45831a2fb73f537a79
         and doc from https://www.w3schools.com/xml/xpath_axes.asp
         and https://docs.python-guide.org/scenarios/scrape/
+
+        lxml can return _ElementUnicodeResult instead of str so cast
         '''
 
         print("Purl:",purl)
@@ -350,6 +385,7 @@ class GPerson():
                 except:
                     print(_("Unable to perform HTML analysis"))
     
+                    self.url = purl
                 try:
                     # Should return F or M
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
@@ -359,8 +395,8 @@ class GPerson():
                     self.sex = 'I'
                 try:
                     name = tree.xpath('//div[@id="person-title"]//a/text()')
-                    self.firstname = name[0]
-                    self.lastname = name[1]
+                    self.firstname = str(name[0])
+                    self.lastname = str(name[1])
                 except:
                     self.firstname = ""
                     self.lastname = ""
@@ -389,12 +425,12 @@ class GPerson():
                 except:
                     self.birth = ""
                 try:
-                    self.birthplace = birth[0].split('-')[1].split(',')[0]
+                    self.birthplace = str(birth[0].split('-')[1].split(',')[0])
                     print('Birth place:', self.birthplace)
                 except:
                     self.birthplace = ""
                 try:
-                    self.birthplacecode = birth[0].split('-')[1].split(',')[1]
+                    self.birthplacecode = str(birth[0].split('-')[1].split(',')[1])
                     print('Birth place code:', self.birthplacecode)
                 except:
                     self.birthplacecode = ""
@@ -405,32 +441,32 @@ class GPerson():
                 except:
                     self.death = ""
                 try:
-                    self.deathplace = death[0].split('-')[1].split(',')[0]
+                    self.deathplace = str(death[0].split('-')[1].split(',')[0])
                     print('Death place:', self.deathplace)
                 except:
                     self.deathplace = ""
                 try:
-                    self.deathplacecode = death[0].split('-')[1].split(',')[1]
+                    self.deathplacecode = str(death[0].split('-')[1].split(',')[1])
                     print('Death place code:', self.deathplacecode)
                 except:
                     self.deathplacecode = ""
 
                 for s in spouse:
                     try:
-                        sname = s.xpath('a/text()')[0]
+                        sname = str(s.xpath('a/text()')[0])
                         print('Spouse name:', sname)
                     except:
                         sname = ""
 
                     try:
-                        sref = s.xpath('a/attribute::href')[0]
+                        sref = str(s.xpath('a/attribute::href')[0])
                         print('Spouse ref:', ROOTURL+sref)
                     except:
                         sref = ""
                     self.spouseref = sref
 
                     try:
-                        married = s.xpath('em/text()')[0]
+                        married = str(s.xpath('em/text()')[0])
                     except: 
                         married = ""
                     try:
@@ -440,12 +476,12 @@ class GPerson():
                     except:
                         self.married = ""
                     try:
-                        self.marriedplace = married.split(',')[1]
+                        self.marriedplace = str(married.split(',')[1])
                         print('Married place:', self.marriedplace)
                     except:
                         self.marriedplace = ""
                     try:
-                        self.marriedplacecode = married.split(',')[2]
+                        self.marriedplacecode = str(married.split(',')[2])
                         print('Married place code:', self.marriedplacecode)
                     except:
                         self.marriedplacecode = ""
@@ -457,7 +493,7 @@ class GPerson():
                     for c in children:
                         try:
                             cname = c.xpath('a/text()')[0]
-                            print('Child %d name (L%d): %s'%(cnum,LEVELA,cname))
+                            print('Child %d name (L%d): %s'%(cnum,LEVEL,cname))
                         except:
                             cname = ""
                         try:
@@ -465,7 +501,7 @@ class GPerson():
                             print('Child %d ref: %s'%(cnum,ROOTURL+cref))
                         except:
                             cref = ""
-                        self.childref.append(cref)
+                        self.childref.append(str(cref))
                         cnum = cnum + 1
     
                 self.pref = []
@@ -475,7 +511,7 @@ class GPerson():
                     if p.xpath('text()')[0] == '\n':
                         try:
                             pname = p.xpath('a/text()')[0]
-                            print('Parent name (L%d): %s'%(LEVELA,pname))
+                            print('Parent name (L%d): %s'%(LEVEL,pname))
                         except:
                             pname = ""
                         try:
@@ -483,7 +519,7 @@ class GPerson():
                             print('Parent ref:', ROOTURL+pref)
                         except:
                             pref = ""
-                        self.pref.append(pref)
+                        self.pref.append(str(pref))
                         print('-----------------------------------------------------------')
     
             else:
@@ -491,52 +527,57 @@ class GPerson():
 
 
     def validate(self):
+        '''
+        Validate the GPerson attributes 
+        and use them to enrich or create a Gramps Person
+        '''
 
-        tran = db.transaction_begin(DbTxn("Geneanet import", db))
-        db.disable_signals()
-        gp = db.get_person_from_gramps_id(self.gid)
-        if gp:
-            if args.verbosity >= 2:
-                print("Existing Person object:", gp)
-        else:
-            # Create a new Person in Gramps
-            gp = Person()
-            if args.verbosity >= 2:
-                print("Create new Person object:", gp)
-            db.add_person(gp,tran)
+        with DbTxn("Geneanet import", db) as tran:
+            db.disable_signals()
+            grampsp = db.get_person_from_gramps_id(self.gid)
+            if grampsp:
+                if args.verbosity >= 2:
+                    print("Existing Gramps Person:", self.gid)
+            else:
+                # Create a new Person in Gramps
+                grampsp = Person()
+                db.add_person(grampsp,tran)
+                db.commit_person(grampsp,tran)
+                self.gid = grampsp.get_gramps_id()
+                if args.verbosity >= 2:
+                    print("Create new Gramps Person:", self.gid)
 
-        if self.sex == 'M':
-            gp.gender = 1
-        elif self.sex == 'F':
-            gp.gender = 0
-        else:
-            gp.gender = 2
-        n = Name()
-        n.set_first_name(self.firstname)
-        s = Surname()
-        s.set_surname(self.lastname)
-        n.add_surname(s)
-        gp.set_primary_name(n)
-
-        # We need to create events for Birth and Death
-
-        db.commit_person(gp,tran)
-        db.enable_signals()
-        db.transaction_commit(tran)
-        tran = None
-        db.request_rebuild()
+            if self.sex == 'H':
+                grampsp.set_gender(Person.MALE)
+            elif self.sex == 'F':
+                grampsp.set_gender(Person.FEMALE)
+            else:
+                grampsp.set_gender(Person.UNKNOWN)
+            n = Name()
+            n.set_type(NameType(NameType.BIRTH))
+            n.set_first_name(self.firstname)
+            s = n.get_primary_surname()
+            s.set_surname(self.lastname)
+            grampsp.set_primary_name(n)
+    
+            # We need to create events for Birth and Death
+    
+            db.commit_person(grampsp,tran)
+            db.enable_signals()
+            db.transaction_commit(tran)
+            db.request_rebuild()
  
     def from_gramps(self,gid):
         self.gid = gid
         try:
-            gp = db.get_person_from_gramps_id(gid)
+            grampsp = db.get_person_from_gramps_id(gid)
             if args.verbosity >= 2:
-                print("Person object:", gp)
-            if gp.gender:
-                self.sex = GENDER[gp.gender]
+                print("Person object:", grampsp)
+            if grampsp.gender:
+                self.sex = GENDER[grampsp.gender]
                 if args.verbosity >= 1:
-                    print("Gender:",GENDER[gp.gender])
-            name = gp.primary_name.get_name().split(', ')
+                    print("Gender:",GENDER[grampsp.gender])
+            name = grampsp.primary_name.get_name().split(', ')
             if name[0]:
                 self.firstname = name[1]
             else:
@@ -551,7 +592,7 @@ class GPerson():
             db.close()
             sys.exit(_("Unable to retrieve id %s from the gramps db %s")%(gid,name))
         try:
-            bd = get_gramps_date(gp,BIRTH,db)
+            bd = get_gramps_date(grampsp,BIRTH,db)
             if bd:
                 print("Birth:",bd)
                 self.birth = bd
@@ -562,7 +603,7 @@ class GPerson():
             sys.exit(_("Unable to retrieve birth date for id %s")%(gid))
 
         try:
-            dd = get_gramps_date(gp,DEATH,db)
+            dd = get_gramps_date(grampsp,DEATH,db)
             if dd:
                 print("Death:",dd)
                 self.death = dd
@@ -573,7 +614,7 @@ class GPerson():
             sys.exit(_("Unable to retrieve death date for id %s")%(gid))
         
         try:
-            md = get_gramps_date(gp,MARRIAGE,db)
+            md = get_gramps_date(grampsp,MARRIAGE,db)
             if md:
                 print("Marriage:",md)
             else:
@@ -584,11 +625,11 @@ class GPerson():
             #sys.exit(_("Unable to retrieve marriage date for id %s")%(gid))
 
         #try:
-            #self.childref = get_child_list(db,gp)
+            #self.childref = get_child_list(db,grampsp)
 
         try:
             self.pref = []
-            fh = gp.get_main_parents_family_handle()
+            fh = grampsp.get_main_parents_family_handle()
             if fh:
                 if args.verbosity >= 1:
                     print("Family:",fh)
@@ -624,8 +665,8 @@ class GPerson():
                     #time.sleep(5)
                     #find_geneanet_person(sref)
 
-                    #if args.descendants and LEVELC < args.level:
-                        #LEVELC = LEVELC + 1
+                    #if args.descendants and LEVEL < args.level:
+                        #LEVEL = LEVEL + 1
                         #time.sleep(5)
                         #find_geneanet_person(cref)
 
@@ -675,9 +716,11 @@ for i in ids:
     if args.verbosity >= 1:
         print(i)
 
+# Create the first Person coming from Gramps
 gp = GPerson(0)
 gp.from_gramps(gid)
 
+# Create the first Person coming from Geneanet
 p = GPerson(0)
 p.from_geneanet(purl)
 
@@ -695,8 +738,8 @@ if gp.birth != p.birth or gp.death != p.death and not args.force:
     sys.exit("Do not continue without force")
 
 # Copy from Geneanet into Gramps and commit
-p.copy(gp)
-p.validate()
+gp.smartcopy(p)
+gp.validate()
 
 # Test zone
 g0 = GPerson(1)
@@ -705,17 +748,17 @@ g0.validate()
 
 sys.exit(0)
 
-while args.ascendants and LEVELA < args.level:
-    LEVELA = LEVELA + 1
+while args.ascendants and LEVEL < args.level:
+    LEVEL = LEVEL + 1
     time.sleep(TIMEOUT)
     if len(p.pref) >= 1:
         # We have 1 or 2 parents: create family and attach parents and child
-        g0 = GPerson(LEVELA)
+        g0 = GPerson(LEVEL)
         g0.from_geneanet(p.pref[0])
-        g1 = GPerson(LEVELA)
+        g1 = GPerson(LEVEL)
         if p.pref[1]:
             g1.from_geneanet(p.pref[1])
-        if g0.sex == 'M':
+        if g0.sex == 'H':
             f = Family(g0,g1)
         else:
             f = Family(g1,g0)
