@@ -67,7 +67,7 @@ from gramps.cli.grampscli import CLIManager
         #Date, DateError, Event, EventRef, EventRoleType, EventType,
         #Family, FamilyRelType, Name, NameType, Note, Person, PersonRef,
         #Place, Source, LdsOrd)
-from gramps.gen.lib import Person, Name, Surname, NameType
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef
 
 LOG = logging.getLogger("geneanetforgedcom")
 
@@ -122,9 +122,9 @@ args = parser.parse_args()
 
 if args.verbosity >= 1:
     print("LEVEL:",LEVEL)
-#person = 'agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
 if args.searchedperson == None:
-    purl = 'agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
+    #purl = 'agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
+    purl = 'agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
 else:
     purl = args.searchedperson
 
@@ -168,12 +168,17 @@ def get_gramps_date(person,evttype,db):
     elif evttype == MARRIAGE:
         ref = get_marriage_date(db,person)
     else:
+        print("Didn't find a known EventType: ",evttype)
         return(None)
 
     if ref:
         if args.verbosity >= 2:
             print("Ref:",ref)
-        event = db.get_event_from_handle(ref.ref)
+        try:
+            event = db.get_event_from_handle(ref.ref)
+        except:
+            print("Didn't find a known ref for this ref date: ",ref)
+            return(None)
         if event:
             if args.verbosity >= 2:
                 print("Event:",event)
@@ -304,10 +309,11 @@ class GPerson():
         self.death = None
         self.deathplace = None
         self.deathplacecode = None
-        self.pref = []
         self.gid = None
         self.url = None
         self.family = []
+        self.pref = []
+        self.pgid = []
 
     def __smartcopy(self,p,attr):
         '''
@@ -387,7 +393,7 @@ class GPerson():
     
                     self.url = purl
                 try:
-                    # Should return F or M
+                    # Should return F or H
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
                     self.sex = sex[0]
                     print('Sex:', self.sex)
@@ -526,12 +532,110 @@ class GPerson():
                 print(_("We failed to be ok with the server"))
 
 
-    def validate(self):
+    def get_or_create_place(self,event,placename):
+        '''
+        Create Place for Events or get an existing one based on the name
+        '''
+        p = event.get_place_handle()
+        try:
+            place = db.get_place_from_handle(p)
+            if args.verbosity >= 2:
+                print("Reuse Place from Event:", placename)
+        except:
+            keep = None
+            # Check whether our place alredy exists
+            for handle in db.get_place_handles():
+                p = db.get_place_from_handle(handle)
+                if str(p.name) == str(placename):
+                    keep = p
+                    break
+            if keep == None:
+                if args.verbosity >= 2:
+                    print("Create Place:", placename)
+                place = Place()
+            else:
+                if args.verbosity >= 2:
+                    print("Reuse existing Place:", placename)
+                place = keep
+        #place.set_title(placename)
+        return(place)
+
+        
+    def get_or_create_person_event(self,p,attr,tran):
+        '''
+        Create Birth and Death Events for this person or get an existing one
+        '''
+        
+        # Manages name indirection
+        func = getattr(p,'get_'+attr+'_ref')
+        reffunc = func()
+        event = None
+        if reffunc:
+            try:
+                event = db.get_event_from_handle(reffunc.ref)
+                eventref = reffunc
+                if args.verbosity >= 2:
+                    print("Existing "+attr+" Event")
+            except:
+                pass
+        if event is None:
+            event = Event()
+            # We manage a person here (for family place False)
+            event.personal = True
+            uptype = getattr(EventType,attr.upper())
+            event.set_type(EventType(uptype))
+            event.set_description('Imported from Geneanet')
+            db.add_event(event,tran)
+            
+            eventref = EventRef()
+            eventref.set_role(EventRoleType.PRIMARY)
+            eventref.set_reference_handle(event.get_handle())
+            func = getattr(p,'set_'+attr+'_ref')
+            reffunc = func(eventref)
+            #p.event_ref_list.append(eventref)
+            if args.verbosity >= 2:
+                print("Creating "+attr+" ("+str(uptype)+") Event, Rank: "+str(p.birth_ref_index))
+        return(event)
+
+    def unknown(self,event):
+        if self.__dict__[attr] \
+            or self.__dict__[attr+'place'] \
+            or self.__dict__[attr+'placecode'] :
+            # TODO: Here we create a new date each time there is a date in object
+            date = Date()
+            if self.__dict__[attr]:
+                if self.__dict__[attr][:1] == 'ca':
+                    mod = Date.MOD_ABOUT 
+                elif self.__dict__[attr][:1] == 'av':
+                    mod = Date.MOD_BEFORE 
+                elif self.__dict__[attr][:1] == 'ap':
+                    mod = Date.MOD_AFTER 
+                else:
+                    mod = Date.MOD_NONE 
+                # ISO string, put in a tuple, reversed
+                tab = self.__dict__[attr].split('-')
+                date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
+            if args.verbosity >= 2:
+                print("Update "+attr+" Date to "+self.__dict__[attr])
+            event.set_date_object(date)
+            if self.__dict__[attr+'place']:
+                placename = self.__dict__[attr+'place']
+                place = self.get_or_create_place(event,placename)
+                # TODO: Here we overwrite any existing value.
+                place.set_title(placename)
+                db.add_place(place,tran)
+                db.commit_place(place,tran)
+                event.set_place_handle(place.get_handle())
+        return(event)
+
+    def validate(self,p):
         '''
         Validate the GPerson attributes 
         and use them to enrich or create a Gramps Person
+        using data from the Genanet p person
         '''
 
+        self.smartcopy(p)
         with DbTxn("Geneanet import", db) as tran:
             db.disable_signals()
             grampsp = db.get_person_from_gramps_id(self.gid)
@@ -543,7 +647,7 @@ class GPerson():
                 grampsp = Person()
                 db.add_person(grampsp,tran)
                 db.commit_person(grampsp,tran)
-                self.gid = grampsp.get_gramps_id()
+                self.gid = grampsp.gramps_id
                 if args.verbosity >= 2:
                     print("Create new Gramps Person:", self.gid)
 
@@ -561,10 +665,12 @@ class GPerson():
             grampsp.set_primary_name(n)
     
             # We need to create events for Birth and Death
+            for ev in ['birth', 'death']:
+                e = self.get_or_create_person_event(grampsp,ev,tran)
+                db.commit_event(e,tran)
     
             db.commit_person(grampsp,tran)
             db.enable_signals()
-            db.transaction_commit(tran)
             db.request_rebuild()
  
     def from_gramps(self,gid):
@@ -613,17 +719,6 @@ class GPerson():
             db.close()
             sys.exit(_("Unable to retrieve death date for id %s")%(gid))
         
-        try:
-            md = get_gramps_date(grampsp,MARRIAGE,db)
-            if md:
-                print("Marriage:",md)
-            else:
-                print("No Marriage date")
-        except:
-            pass
-            #db.close()
-            #sys.exit(_("Unable to retrieve marriage date for id %s")%(gid))
-
         #try:
             #self.childref = get_child_list(db,grampsp)
 
@@ -645,7 +740,7 @@ class GPerson():
                     if father:
                         if args.verbosity >= 1:
                             print("Father name:",father.primary_name.get_name())
-                        self.pref.append(father)
+                        self.pgid.append(father.gramps_id)
                 mh = fam.get_mother_handle()
                 if mh:
                     print("Mother H:",mh)
@@ -653,7 +748,7 @@ class GPerson():
                     if mother:
                         if args.verbosity >= 1:
                             print("Mother name:",mother.primary_name.get_name())
-                        self.pref.append(mother)
+                        self.pgid.append(mother.gramps_id)
         except:
             db.close()
             sys.exit(_("Unable to retrieve family for id %s")%(gid))
@@ -694,7 +789,7 @@ name = args.grampsfile
 if name == None:
     #name = "Test import"
     # To be searched in ~/.gramps/recent-files-gramps.xml
-    name = "/users/bruno/.gramps/grampsdb/5eb60265"
+    name = "/users/bruno/.gramps/grampsdb/5ec17554"
 try:
     dbstate = DbState()
     climanager = CLIManager(dbstate, True, None)
@@ -716,6 +811,10 @@ for i in ids:
     if args.verbosity >= 1:
         print(i)
 
+if args.verbosity >= 1 and args.force:
+    print("WARNING: Force mode activated")
+    time.sleep(TIMEOUT)
+
 # Create the first Person coming from Gramps
 gp = GPerson(0)
 gp.from_gramps(gid)
@@ -725,26 +824,31 @@ p = GPerson(0)
 p.from_geneanet(purl)
 
 # Check we point to the same person
-if gp.firstname != p.firstname or gp.lastname != p.lastname and not args.force:
+if (gp.firstname != p.firstname or gp.lastname != p.lastname) and (not args.force):
     print("Gramps   person: %s %s"%(gp.firstname,gp.lastname))
     print("Geneanet person: %s %s"%(p.firstname,p.lastname))
     db.close()
     sys.exit("Do not continue without force")
 
-if gp.birth != p.birth or gp.death != p.death and not args.force:
+if (gp.birth != p.birth or gp.death != p.death) and (not args.force):
     print("Gramps   person birth/death: %s / %s"%(gp.birth,gp.death))
     print("Geneanet person birth/death: %s / %s"%(p.birth,p.death))
     db.close()
     sys.exit("Do not continue without force")
 
 # Copy from Geneanet into Gramps and commit
-gp.smartcopy(p)
-gp.validate()
+gp.validate(p)
 
 # Test zone
+gp0 = GPerson(1)
+print("PGID: ",gp.pgid)
+try: 
+    gp0.from_gramps(gp.pgid[0])
+except:
+    pass
 g0 = GPerson(1)
 g0.from_geneanet(p.pref[0])
-g0.validate()
+gp0.validate(g0)
 
 sys.exit(0)
 
