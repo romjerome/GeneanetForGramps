@@ -529,18 +529,29 @@ class GPerson():
         '''
         Create Place for Events or get an existing one based on the name
         '''
-        p = event.get_place_handle()
         try:
-            place = db.get_place_from_handle(p)
-            if args.verbosity >= 2:
-                print("Reuse Place from Event:", placename)
+            pl = event.get_place_handle()
         except:
+            place = Place()
+            return(place)
+
+        if pl:
+            try:
+                place = db.get_place_from_handle(pl)
+                if args.verbosity >= 2:
+                    print("Reuse Place from Event:", placename)
+            except:
+                place = Place()
+        else:
             keep = None
-            # Check whether our place alredy exists
+            # Check whether our place already exists
             for handle in db.get_place_handles():
-                p = db.get_place_from_handle(handle)
-                if str(p.name) == str(placename):
-                    keep = p
+                pl = db.get_place_from_handle(handle)
+                explace = pl.get_name().value
+                if args.verbosity >= 2:
+                    print("DEBUG: search for "+str(placename)+" in "+str(explace))
+                if str(explace) == str(placename):
+                    keep = pl
                     break
             if keep == None:
                 if args.verbosity >= 2:
@@ -587,9 +598,7 @@ class GPerson():
             #p.event_ref_list.append(eventref)
             if args.verbosity >= 2:
                 print("Creating "+attr+" ("+str(uptype)+") Event, Rank: "+str(p.birth_ref_index))
-        return(event)
 
-    def unknown(self,event):
         if self.__dict__[attr] \
             or self.__dict__[attr+'place'] \
             or self.__dict__[attr+'placecode'] :
