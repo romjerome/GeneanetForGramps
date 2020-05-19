@@ -424,12 +424,12 @@ class GPerson():
                 except:
                     self.birth = ""
                 try:
-                    self.birthplace = str(birth[0].split('-')[1].split(',')[0])
+                    self.birthplace = str(birth[0].split('-')[1].split(',')[0].strip())
                     print('Birth place:', self.birthplace)
                 except:
                     self.birthplace = ""
                 try:
-                    self.birthplacecode = str(birth[0].split('-')[1].split(',')[1])
+                    self.birthplacecode = str(birth[0].split('-')[1].split(',')[1]).strip()
                     print('Birth place code:', self.birthplacecode)
                 except:
                     self.birthplacecode = ""
@@ -440,12 +440,12 @@ class GPerson():
                 except:
                     self.death = ""
                 try:
-                    self.deathplace = str(death[0].split('-')[1].split(',')[0])
+                    self.deathplace = str(death[0].split('-')[1].split(',')[0]).strip()
                     print('Death place:', self.deathplace)
                 except:
                     self.deathplace = ""
                 try:
-                    self.deathplacecode = str(death[0].split('-')[1].split(',')[1])
+                    self.deathplacecode = str(death[0].split('-')[1].split(',')[1]).strip()
                     print('Death place code:', self.deathplacecode)
                 except:
                     self.deathplacecode = ""
@@ -550,7 +550,6 @@ class GPerson():
                 if args.verbosity >= 2:
                     print("Reuse existing Place:", placename)
                 place = keep
-        #place.set_title(placename)
         return(place)
 
         
@@ -843,6 +842,7 @@ g0 = GPerson(1)
 g0.from_geneanet(p.pref[0])
 gp0.validate(g0)
 
+db.close()
 sys.exit(0)
 
 while args.ascendants and LEVEL < args.level:
