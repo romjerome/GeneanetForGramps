@@ -43,7 +43,6 @@ from gramps.gui.editors import EditPerson
 from gramps.gen.errors import WindowActiveError, DatabaseError
 from gramps.gen.display.name import displayer as name_displayer
 from gramps.gen.datehandler import get_date
-from gramps.gen.utils.db import get_birth_or_fallback, get_death_or_fallback
 
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 try:
@@ -52,22 +51,16 @@ except ValueError:
     _trans = glocale.translation
 _ = _trans.gettext
 
-import zipfile
 import logging
-from gramps.version import VERSION
 from gramps.gen.config import config
 from gramps.gen.display.place import displayer as _pd
-from gramps.gen.utils.location import get_main_location
-from gramps.gen.utils.place import conv_lat_lon
 from gramps.gen.db import DbTxn
 from gramps.gen.db.utils import open_database
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
-#from gramps.gen.lib import (Attribute, AttributeType, ChildRef, Citation,
-        #Date, DateError, Event, EventRef, EventRoleType, EventType,
-        #Family, FamilyRelType, Name, NameType, Note, Person, PersonRef,
-        #Place, Source, LdsOrd)
-from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName
+#from gramps.gen.utils.location import get_main_location
+#from gramps.version import VERSION
 
 LOG = logging.getLogger("geneanetforgedcom")
 
@@ -874,4 +867,3 @@ while args.ascendants and LEVEL < args.level:
 
 db.close()
 sys.exit(0)
-
