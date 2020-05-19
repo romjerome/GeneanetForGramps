@@ -610,14 +610,22 @@ class GPerson():
             if args.verbosity >= 2:
                 print("Update "+attr+" Date to "+self.__dict__[attr])
             event.set_date_object(date)
-            if self.__dict__[attr+'place']:
-                placename = self.__dict__[attr+'place']
+            db.commit_event(event,tran)
+
+            if self.__dict__[attr+'place'] \
+                or self.__dict__[attr+'placecode'] :
+                if self.__dict__[attr+'place']:
+                    placename = self.__dict__[attr+'place']
+                else:
+                    placename = ""
                 place = self.get_or_create_place(event,placename)
                 # TODO: Here we overwrite any existing value.
-                place.set_title(placename)
+                place.set_name(PlaceName(value=placename))
+                if self.__dict__[attr+'placecode']:
+                    place.set_code(self.__dict__[attr+'placecode'])
                 db.add_place(place,tran)
-                db.commit_place(place,tran)
                 event.set_place_handle(place.get_handle())
+                db.commit_event(event,tran)
         return(event)
 
     def validate(self,p):
@@ -638,7 +646,6 @@ class GPerson():
                 # Create a new Person in Gramps
                 grampsp = Person()
                 db.add_person(grampsp,tran)
-                db.commit_person(grampsp,tran)
                 self.gid = grampsp.gramps_id
                 if args.verbosity >= 2:
                     print("Create new Gramps Person:", self.gid)
@@ -778,6 +785,8 @@ def import_data(database, filename, user):
 
 # MAIN
 name = args.grampsfile
+
+# TODO: to a backup before opening
 if name == None:
     #name = "Test import"
     # To be searched in ~/.gramps/recent-files-gramps.xml
