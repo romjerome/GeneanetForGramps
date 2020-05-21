@@ -965,48 +965,52 @@ def geneanet_to_gramps(level, gid, url):
     gp.validate(p)
     return(gp)
 
+def main():
+	name = args.grampsfile
+	
+	# TODO: to a backup before opening
+	if name == None:
+	    #name = "Test import"
+	    # To be searched in ~/.gramps/recent-files-gramps.xml
+	    name = "/users/bruno/.gramps/grampsdb/5ec17554"
+	try:
+	    dbstate = DbState()
+	    climanager = CLIManager(dbstate, True, None)
+	    climanager.open_activate(name)
+	    db = dbstate.db
+	except:
+	    ErrorDialog(_("Opening the '%s' database") % name,
+	                _("An attempt to convert the database failed. "
+	                  "Perhaps it needs updating."), parent=self.top)
+	    sys.exit()
+	
+	gid = args.id
+	if gid == None:
+	    gid = "0000"
+	gid = "I"+gid
+	
+	ids = db.get_person_gramps_ids()
+	for i in ids:
+	    if args.verbosity >= 1:
+	        print(i)
+	
+	if args.verbosity >= 1 and args.force:
+	    print("WARNING: Force mode activated")
+	    time.sleep(TIMEOUT)
+	
+	# Create the first Person 
+	gp = geneanet_to_gramps(LEVEL,gid,purl)
+	
+	if args.ascendants:
+	    gp.recurse_parents(LEVEL)
+	
+	LEVEL = 0
+	if args.descendants:
+	    time.sleep(TIMEOUT)
+	
+	db.close()
+	sys.exit(0)
+
 # MAIN
-name = args.grampsfile
-
-# TODO: to a backup before opening
-if name == None:
-    #name = "Test import"
-    # To be searched in ~/.gramps/recent-files-gramps.xml
-    name = "/users/bruno/.gramps/grampsdb/5ec17554"
-try:
-    dbstate = DbState()
-    climanager = CLIManager(dbstate, True, None)
-    climanager.open_activate(name)
-    db = dbstate.db
-except:
-    ErrorDialog(_("Opening the '%s' database") % name,
-                _("An attempt to convert the database failed. "
-                  "Perhaps it needs updating."), parent=self.top)
-    sys.exit()
-
-gid = args.id
-if gid == None:
-    gid = "0000"
-gid = "I"+gid
-
-ids = db.get_person_gramps_ids()
-for i in ids:
-    if args.verbosity >= 1:
-        print(i)
-
-if args.verbosity >= 1 and args.force:
-    print("WARNING: Force mode activated")
-    time.sleep(TIMEOUT)
-
-# Create the first Person 
-gp = geneanet_to_gramps(LEVEL,gid,purl)
-
-if args.ascendants:
-    gp.recurse_parents(LEVEL)
-
-LEVEL = 0
-if args.descendants:
-    time.sleep(TIMEOUT)
-
-db.close()
-sys.exit(0)
+if __name__ == '__main__':
+    main()
