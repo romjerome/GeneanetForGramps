@@ -331,13 +331,22 @@ class GFamily():
             print("Adding Child : "+child.firstname+" "+child.lastname)
         childref = ChildRef()
         try:
-            childref.set_reference_handle(child.get_handle())
+            grampsp = db.get_person_from_gramps_id(child.gid)
+        except:
+            if args.verbosity >= 2:
+                print('No child for this family')
+            grampsp = None
+        if grampsp:
+            try:
+                childref.set_reference_handle(grampsp.get_handle())
+            except:
+                if args.verbosity >= 2:
+                    print('No handle for this child')
             self.family.add_child_ref(childref)
             with DbTxn("Geneanet import", db) as tran:
-                db.commit_family(self.family,self.tran)
-                child.add_parent_family_handle(self.family.get_handle())
-        except:
-            pass
+                db.commit_family(self.family,tran)
+                grampsp.add_parent_family_handle(self.family.get_handle())
+                db.commit_person(grampsp,tran)
 
 class GPerson():
     '''
