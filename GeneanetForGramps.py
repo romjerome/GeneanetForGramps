@@ -868,16 +868,53 @@ class GPerson():
             if args.verbosity >= 1:
                 print(_("Unable to retrieve family for id %s")%(gid))
 
-#
-# To be seen later
-                #if args.spouse:
-                    #time.sleep(5)
-                    #find_geneanet_person(sref)
+    def recurse_parents(self,level):
+        '''
+        analyze the parents of the person passed in parameter recursively
+        '''
+        # Recurse while we have parents urls and level not reached
+        if level <= args.level and (self.fref != "" or self.mref != ""):
+            level = level + 1
+            time.sleep(TIMEOUT)
+            gp0 = geneanet_to_gramps(level,self.fgid,self.fref)
+            gp1 = geneanet_to_gramps(level,self.mgid,self.mref)
 
-                    #if args.descendants and LEVEL < args.level:
-                        #LEVEL = LEVEL + 1
-                        #time.sleep(5)
-                        #find_geneanet_person(cref)
+            # In case there are errors between father and mother, check and fix
+            if gp0.sex == 'H':
+                father = gp0
+                mother = gp1
+            else:
+                father = gp1
+                mother = gp0
+
+            if args.verbosity >= 2:
+                print("=> Recursing on the father of "+self.firstname+" "+self.lastname+' : '+father.firstname+' '+father.lastname)
+            father.recurse_parents(level)
+            if args.verbosity >= 2:
+                print("=> End of recursion on the father of "+self.firstname+" "+self.lastname+' : '+father.firstname+' '+father.lastname)
+            time.sleep(TIMEOUT)
+            if args.verbosity >= 2:
+                print("=> Recursing on the mother of "+self.firstname+" "+self.lastname+' : '+mother.firstname+' '+mother.lastname)
+            mother.recurse_parents(level)
+            if args.verbosity >= 2:
+                print("=> End of recursing on the mother of "+self.firstname+" "+self.lastname+' : '+mother.firstname+' '+mother.lastname)
+            if args.verbosity >= 2:
+                print("=> Initialize Family of "+self.firstname+" "+self.lastname)
+            f = GFamily(father,mother)
+            f.add_child(self)
+        if level > args.level:
+            if args.verbosity >= 1:
+                print("Stopping exploration as we reached level "+str(level))
+
+    def recurse_children(level,gp):
+        '''
+        analyze the children of the person passed in parameter recursively
+        '''
+        # TODO: probably need the spouse as param
+        # Recurse while we have parents urls and level not reached
+        while level <= args.level and (gp.fref != "" or gp.mref != ""):
+            level = level + 1
+            time.sleep(TIMEOUT)
 
 def import_data(database, filename, user):
 
@@ -928,32 +965,6 @@ def geneanet_to_gramps(level, gid, url):
     gp.validate(p)
     return(gp)
 
-def recurse_parents(level,gp):
-    '''
-    analyze the parents of the person passed in parameter recursively
-    '''
-    # Recurse while we have parents urls and level not reached
-    while level < args.level and (gp.fref != "" or gp.mref != ""):
-        level = level + 1
-        time.sleep(TIMEOUT)
-        gp0 = geneanet_to_gramps(level,gp.fgid,gp.fref)
-        recurse_parents(level,gp0)
-        time.sleep(TIMEOUT)
-        gp1 = geneanet_to_gramps(level,gp.mgid,gp.mref)
-        recurse_parents(level,gp1)
-        f = GFamily(gp0,gp1)
-        f.add_child(gp)
-
-def recurse_children(level,gp):
-    '''
-    analyze the children of the person passed in parameter recursively
-    '''
-    # TODO: probably need the spouse as param
-    # Recurse while we have parents urls and level not reached
-    while level < args.level and (gp.fref != "" or gp.mref != ""):
-        level = level + 1
-        time.sleep(TIMEOUT)
-
 # MAIN
 name = args.grampsfile
 
@@ -988,16 +999,14 @@ if args.verbosity >= 1 and args.force:
     time.sleep(TIMEOUT)
 
 # Create the first Person 
-gp = geneanet_to_gramps(0,gid,purl)
+gp = geneanet_to_gramps(LEVEL,gid,purl)
 
 if args.ascendants:
-        recurse_parents(LEVEL,gp)
+    gp.recurse_parents(LEVEL)
 
 LEVEL = 0
 if args.descendants:
-    while LEVEL < args.level:
-        LEVEL = LEVEL + 1
-        time.sleep(TIMEOUT)
+    time.sleep(TIMEOUT)
 
 db.close()
 sys.exit(0)
