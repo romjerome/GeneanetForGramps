@@ -481,11 +481,12 @@ class GPerson():
                 except:
                     death = [""]
                 try:
-                    parents = tree.xpath('//li[@style="vertical-align:middle;list-style-type:disc"]')
+                    # sometime parents are using circle, somtimes disc !
+                    parents = tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//li[@style="vertical-align:middle;list-style-type:disc" or @style="vertical-align:middle;list-style-type:circle"]')
                 except:
                     parents = []
                 try:
-                    spouse = tree.xpath('//ul[@class="fiche_union"]//li[@style="vertical-align:middle;list-style-type:disc"]')
+                    spouse = tree.xpath('//ul[@class="fiche_union"]//li]')
                 except:
                     spouse = []
                 try:
