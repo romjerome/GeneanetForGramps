@@ -151,8 +151,8 @@ def get_gramps_date(person,evttype,db):
     Give back the date of the event related to the person
     '''
 
-    if args.verbosity >= 2:
-        print("Verb: %d - Evt: %d"%(args.verbosity,evttype))
+    if args.verbosity >= 3:
+        print("EventType: %d"%(evttype))
 
     if evttype == BIRTH:
         ref = person.get_birth_ref()
@@ -165,7 +165,7 @@ def get_gramps_date(person,evttype,db):
         return(None)
 
     if ref:
-        if args.verbosity >= 2:
+        if args.verbosity >= 3:
             print("Ref:",ref)
         try:
             event = db.get_event_from_handle(ref.ref)
@@ -173,20 +173,20 @@ def get_gramps_date(person,evttype,db):
             print("Didn't find a known ref for this ref date: ",ref)
             return(None)
         if event:
-            if args.verbosity >= 2:
+            if args.verbosity >= 3:
                 print("Event:",event)
             date = event.get_date_object()
             tab = date.get_dmy()
-            if args.verbosity >= 1:
+            if args.verbosity >= 3:
                 print("Found date:",tab)
             if len(tab) == 3:
                 tab = date.get_ymd()
-                if args.verbosity >= 2:
+                if args.verbosity >= 3:
                     print("Found date2:",tab)
                 ret = format_iso(tab)
             else:
                 ret = format_noniso(tab)
-            if args.verbosity >= 2:
+            if args.verbosity >= 3:
                 print("Returned date:",ret)
             return(ret)
         else:
@@ -231,7 +231,7 @@ def convert_date(datetab):
     into an ISO date format
     '''
 
-    if args.verbosity >= 1:
+    if args.verbosity >= 3:
         print("datetab received:",datetab)
 
     if len(datetab) == 0:
@@ -278,6 +278,8 @@ class GFamily():
     Family as seen by Gramps
     '''
     def __init__(self,gp0,gp1):
+        if args.verbosity >= 1:
+            print("Creating Family: "+gp0.lastname+" - "+gp1.lastname)
         self.marriage = None
         self.marriageplace = None
         self.marriageplacecode = None
@@ -305,6 +307,8 @@ class GFamily():
                 pass
 
     def add_child(self,child):
+        if args.verbosity >= 1:
+            print("Adding Child : "+child.firstname+" "+child.lastname)
         childref = ChildRef()
         try:
             childref.set_reference_handle(child.get_handle())
@@ -320,7 +324,7 @@ class GPerson():
     Generic Person common between Gramps and Geneanet
     '''
     def __init__(self,level):
-        if args.verbosity >= 2:
+        if args.verbosity >= 3:
             print("Initialize Person")
         self.level = level
         self.firstname = ""
@@ -345,7 +349,7 @@ class GPerson():
         '''
         Smart Copying an attribute from p into self
         '''
-        if args.verbosity >= 2:
+        if args.verbosity >= 3:
             print("Smart Copying Attributes",attr)
 
         # By default do not copy
@@ -367,7 +371,8 @@ class GPerson():
         if scopy:
             self.__dict__[attr] = p.__dict__[attr]
         else:
-            print("Not Copying Person attribute (%s, value %s) onto %s"%(attr, self.__dict__[attr],p.__dict__[attr]))
+            if args.verbosity >= 3:
+                print("Not Copying Person attribute (%s, value %s) onto %s"%(attr, self.__dict__[attr],p.__dict__[attr]))
 
     def smartcopy(self,p):
         '''
@@ -399,15 +404,17 @@ class GPerson():
         lxml can return _ElementUnicodeResult instead of str so cast
         '''
 
-        print("Purl:",purl)
+        if args.verbosity >= 3:
+            print("Purl:",purl)
         if not purl:
             return()
         try:
             p = ROOTURL+purl
             if args.verbosity >= 1:
+                print('-----------------------------------------------------------')
                 print("Page considered:",p)
             page = requests.get(p)
-            if args.verbosity >= 1:
+            if args.verbosity >= 3:
                 print(_("Return code:"),page.status_code)
         except:
             print("We failed to reach the server at",p)
@@ -423,7 +430,6 @@ class GPerson():
                     # Should return F or H
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
                     self.sex = sex[0]
-                    print('Sex:', self.sex)
                 except:
                     self.sex = 'I'
                 try:
@@ -433,6 +439,10 @@ class GPerson():
                 except:
                     self.firstname = ""
                     self.lastname = ""
+                if args.verbosity >= 1:
+                    print('==> GENEANET Name (L%d): %s %s'%(self.level,self.firstname,self.lastname))
+                if args.verbosity >= 2:
+                    print('Sex:', self.sex)
                 try:
                     birth = tree.xpath('//li[contains(., "Né")]/text()')
                 except:
@@ -449,51 +459,57 @@ class GPerson():
                     spouse = tree.xpath('//ul[@class="fiche_union"]//li[@style="vertical-align:middle;list-style-type:disc"]')
                 except:
                     spouse = []
-                print('-----------------------------------------------------------')
-                print('Name (L%d): %s %s'%(self.level,self.firstname,self.lastname))
                 try:
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
-                    print('Birth:', ld)
+                    if args.verbosity >= 2:
+                        print('Birth:', ld)
                     self.birth = ld
                 except:
                     self.birth = ""
                 try:
                     self.birthplace = str(birth[0].split('-')[1].split(',')[0].strip())
-                    print('Birth place:', self.birthplace)
+                    if args.verbosity >= 2:
+                        print('Birth place:', self.birthplace)
                 except:
                     self.birthplace = ""
                 try:
                     self.birthplacecode = str(birth[0].split('-')[1].split(',')[1]).strip()
-                    print('Birth place code:', self.birthplacecode)
+                    if args.verbosity >= 2:
+                        print('Birth place code:', self.birthplacecode)
                 except:
                     self.birthplacecode = ""
                 try:
                     ld = convert_date(death[0].split('-')[0].split()[1:])
-                    print('Death:', ld)
+                    if args.verbosity >= 2:
+                        print('Death:', ld)
                     self.death = ld
                 except:
                     self.death = ""
                 try:
                     self.deathplace = str(death[0].split('-')[1].split(',')[0]).strip()
-                    print('Death place:', self.deathplace)
+                    if args.verbosity >= 2:
+                        print('Death place:', self.deathplace)
                 except:
                     self.deathplace = ""
                 try:
                     self.deathplacecode = str(death[0].split('-')[1].split(',')[1]).strip()
-                    print('Death place code:', self.deathplacecode)
+                    if args.verbosity >= 2:
+                        print('Death place code:', self.deathplacecode)
                 except:
                     self.deathplacecode = ""
 
                 for s in spouse:
                     try:
                         sname = str(s.xpath('a/text()')[0])
-                        print('Spouse name:', sname)
+                        if args.verbosity >= 2:
+                            print('Spouse name:', sname)
                     except:
                         sname = ""
 
                     try:
                         sref = str(s.xpath('a/attribute::href')[0])
-                        print('Spouse ref:', ROOTURL+sref)
+                        if args.verbosity >= 2:
+                            print('Spouse ref:', ROOTURL+sref)
                     except:
                         sref = ""
                     self.spouseref = sref
@@ -504,21 +520,23 @@ class GPerson():
                         married = ""
                     try:
                         ld = convert_date(married.split(',')[0].split()[1:])
-                        print('Married:', ld)
+                        if args.verbosity >= 2:
+                            print('Married:', ld)
                         self.married = ld
                     except:
                         self.married = ""
                     try:
                         self.marriedplace = str(married.split(',')[1])
-                        print('Married place:', self.marriedplace)
+                        if args.verbosity >= 2:
+                            print('Married place:', self.marriedplace)
                     except:
                         self.marriedplace = ""
                     try:
                         self.marriedplacecode = str(married.split(',')[2])
-                        print('Married place code:', self.marriedplacecode)
+                        if args.verbosity >= 2:
+                            print('Married place code:', self.marriedplacecode)
                     except:
                         self.marriedplacecode = ""
-                    print('-----------------------------------------------------------')
     
                     children = s.xpath('ul/li[@style="vertical-align:middle;list-style-type:square;"]')
                     cnum = 0
@@ -526,7 +544,7 @@ class GPerson():
                     for c in children:
                         try:
                             cname = c.xpath('a/text()')[0]
-                            print('Child %d name (L%d): %s'%(cnum,LEVEL,cname))
+                            print('Child %d name: %s'%(cnum,cname))
                         except:
                             cname = ""
                         try:
@@ -541,12 +559,12 @@ class GPerson():
                 self.mref = ""
                 self.pref = []
                 for p in parents:
-                    if args.verbosity >= 1:
+                    if args.verbosity >= 3:
                         print(p.xpath('text()'))
                     if p.xpath('text()')[0] == '\n':
                         try:
                             pname = p.xpath('a/text()')[0]
-                            print('Parent name (L%d): %s'%(LEVEL,pname))
+                            print('Parent name: %s'%(pname))
                         except:
                             pname = ""
                             # if pname is ? ? then go to next one
@@ -556,7 +574,6 @@ class GPerson():
                         except:
                             pref = ""
                         self.pref.append(str(pref))
-                        print('-----------------------------------------------------------')
                 try:
                     self.fref = self.pref[0]
                 except:
@@ -565,6 +582,8 @@ class GPerson():
                     self.mref = self.pref[1]
                 except:
                     self.mref = ""
+                if args.verbosity >= 2:
+                    print('-----------------------------------------------------------')
     
             else:
                 print(_("We failed to be ok with the server"))
@@ -593,7 +612,7 @@ class GPerson():
             for handle in db.get_place_handles():
                 pl = db.get_place_from_handle(handle)
                 explace = pl.get_name().value
-                if args.verbosity >= 2:
+                if args.verbosity >= 3:
                     print("DEBUG: search for "+str(placename)+" in "+str(explace))
                 if str(explace) == str(placename):
                     keep = pl
@@ -632,7 +651,10 @@ class GPerson():
             event.personal = True
             uptype = getattr(EventType,attr.upper())
             event.set_type(EventType(uptype))
-            event.set_description('Imported from Geneanet')
+            if self.url:
+                event.set_description('Imported from '+self.url)
+            else:
+                event.set_description('Imported from Geaneanet')
             db.add_event(event,tran)
             
             eventref = EventRef()
@@ -702,7 +724,7 @@ class GPerson():
                 db.add_person(grampsp,tran)
                 self.gid = grampsp.gramps_id
                 if args.verbosity >= 2:
-                    print("Create new Gramps Person:", self.gid)
+                    print("Create new Gramps Person: "+self.gid+' ('+self.firstname+' '+self.lastname+')')
 
             if self.sex == 'H':
                 grampsp.set_gender(Person.MALE)
@@ -732,7 +754,7 @@ class GPerson():
             return
         try:
             grampsp = db.get_person_from_gramps_id(gid)
-            if args.verbosity >= 2:
+            if args.verbosity >= 3:
                 print("Person object:", grampsp)
             if grampsp.gender:
                 self.sex = GENDER[grampsp.gender]
@@ -748,18 +770,22 @@ class GPerson():
             else:
                 self.firstname = ""
             if args.verbosity >= 1:
-                print("Name: %s %s"%(self.firstname,self.lastname))
+                print("===> GRAMPS Name: %s %s"%(self.firstname,self.lastname))
+                print("Gramps Id: %s"%(gid))
         except:
             if args.verbosity >= 2:
                 print(_("Unable to retrieve id %s from the gramps db %s")%(gid,name))
+            return
 
         try:
             bd = get_gramps_date(grampsp,BIRTH,db)
             if bd:
-                print("Birth:",bd)
+                if args.verbosity >= 1:
+                    print("Birth:",bd)
                 self.birth = bd
             else:
-                print("No Birth date")
+                if args.verbosity >= 1:
+                    print("No Birth date")
         except:
             if args.verbosity >= 1:
                 print(_("Unable to retrieve birth date for id %s")%(gid))
@@ -767,10 +793,12 @@ class GPerson():
         try:
             dd = get_gramps_date(grampsp,DEATH,db)
             if dd:
-                print("Death:",dd)
+                if args.verbosity >= 1:
+                    print("Death:",dd)
                 self.death = dd
             else:
-                print("No Death date")
+                if args.verbosity >= 1:
+                    print("No Death date")
         except:
             if args.verbosity >= 1:
                 print(_("Unable to retrieve death date for id %s")%(gid))
@@ -781,7 +809,7 @@ class GPerson():
         try:
             fh = grampsp.get_main_parents_family_handle()
             if fh:
-                if args.verbosity >= 1:
+                if args.verbosity >= 3:
                     print("Family:",fh)
                 fam = db.get_family_from_handle(fh)
                 if fam:
@@ -790,7 +818,8 @@ class GPerson():
                 # find father from a family
                 fh = fam.get_father_handle()
                 if fh:
-                    print("Father H:",fh)
+                    if args.verbosity >= 3:
+                        print("Father H:",fh)
                     father = db.get_person_from_handle(fh)
                     if father:
                         if args.verbosity >= 1:
@@ -798,7 +827,8 @@ class GPerson():
                         self.fgid = father.gramps_id
                 mh = fam.get_mother_handle()
                 if mh:
-                    print("Mother H:",mh)
+                    if args.verbosity >= 3:
+                        print("Mother H:",mh)
                     mother = db.get_person_from_handle(mh)
                     if mother:
                         if args.verbosity >= 1:
