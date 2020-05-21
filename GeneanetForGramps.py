@@ -291,20 +291,40 @@ class GFamily():
             db.add_family(self.family,tran)
 
             try:
-                self.family.set_father_handle(gp0.get_handle())
-                db.commit_family(self.family,tran)
-                gp0.add_family_handle(self.family.get_handle())
-                db.commit_person(gp0,tran)
+                grampsp0 = db.get_person_from_gramps_id(gp0.gid)
             except:
-                pass
+                if args.verbosity >= 2:
+                    print('No father for this family')
+                grampsp0 = None
+
+            if grampsp0:
+                try:
+                    self.family.set_father_handle(grampsp0.get_handle())
+                except:
+                    if args.verbosity >= 2:
+                        print("Can't affect father to the family")
+
+                db.commit_family(self.family,tran)
+                grampsp0.add_family_handle(self.family.get_handle())
+                db.commit_person(grampsp0,tran)
 
             try:
-                self.family.set_mother_handle(gp1.get_handle())
-                db.commit_family(self.family,tran)
-                gp0.add_family_handle(self.family.get_handle())
-                db.commit_person(gp1,tran)
+                grampsp1 = db.get_person_from_gramps_id(gp1.gid)
             except:
-                pass
+                if args.verbosity >= 2:
+                    print('No mother for this family')
+                grampsp1 = None
+
+            if grampsp1:
+                try:
+                    self.family.set_mother_handle(grampsp1.get_handle())
+                except:
+                    if args.verbosity >= 2:
+                        print("Can't affect mother to the family")
+
+                db.commit_family(self.family,tran)
+                grampsp1.add_family_handle(self.family.get_handle())
+                db.commit_person(grampsp1,tran)
 
     def add_child(self,child):
         if args.verbosity >= 1:
@@ -628,13 +648,13 @@ class GPerson():
         return(place)
 
         
-    def get_or_create_person_event(self,p,attr,tran):
+    def get_or_create_person_event(self,grampsp,attr,tran):
         '''
         Create Birth and Death Events for this person or get an existing one
         '''
         
         # Manages name indirection
-        func = getattr(p,'get_'+attr+'_ref')
+        func = getattr(grampsp,'get_'+attr+'_ref')
         reffunc = func()
         event = None
         if reffunc:
@@ -660,11 +680,11 @@ class GPerson():
             eventref = EventRef()
             eventref.set_role(EventRoleType.PRIMARY)
             eventref.set_reference_handle(event.get_handle())
-            func = getattr(p,'set_'+attr+'_ref')
+            func = getattr(grampsp,'set_'+attr+'_ref')
             reffunc = func(eventref)
             #p.event_ref_list.append(eventref)
             if args.verbosity >= 2:
-                print("Creating "+attr+" ("+str(uptype)+") Event, Rank: "+str(p.birth_ref_index))
+                print("Creating "+attr+" ("+str(uptype)+") Event, Rank: "+str(grampsp.birth_ref_index))
 
         if self.__dict__[attr] \
             or self.__dict__[attr+'place'] \
