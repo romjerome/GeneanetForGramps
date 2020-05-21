@@ -58,7 +58,7 @@ from gramps.gen.db import DbTxn
 from gramps.gen.db.utils import open_database
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
-from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef
 #from gramps.gen.utils.location import get_main_location
 #from gramps.version import VERSION
 
@@ -273,17 +273,47 @@ class Geneanet(Gramplet):
                                event_func=self.cb_double_click)
         return self.view
 
-class Family():
+class GFamily():
     '''
     Family as seen by Gramps
     '''
-    def __init__(self,gp1,gp2):
-        self.father = gp1
-        self.mother = gp2
+    def __init__(self,gp0,gp1):
         self.marriage = None
         self.marriageplace = None
         self.marriageplacecode = None
-        self.childref = []
+        self.children = []
+
+        # TODO: do these people already form a family, supposing not for now
+        self.family = Family()
+        with DbTxn("Geneanet import", db) as tran:
+            db.add_family(self.family,tran)
+
+            try:
+                self.family.set_father_handle(gp0.get_handle())
+                db.commit_family(self.family,tran)
+                gp0.add_family_handle(self.family.get_handle())
+                db.commit_person(gp0,tran)
+            except:
+                pass
+
+            try:
+                self.family.set_mother_handle(gp1.get_handle())
+                db.commit_family(self.family,tran)
+                gp0.add_family_handle(self.family.get_handle())
+                db.commit_person(gp1,tran)
+            except:
+                pass
+
+    def add_child(self,child):
+        childref = ChildRef()
+        try:
+            childref.set_reference_handle(child.get_handle())
+            self.family.add_child_ref(childref)
+            with DbTxn("Geneanet import", db) as tran:
+                db.commit_family(self.family,self.tran)
+                child.add_parent_family_handle(self.family.get_handle())
+        except:
+            pass
 
 class GPerson():
     '''
@@ -305,8 +335,11 @@ class GPerson():
         self.gid = None
         self.url = None
         self.family = []
-        self.pref = []
-        self.pgid = []
+        self.fref = ""
+        self.mref = ""
+        # Father and Mother id in gramps
+        self.fgid = None
+        self.mgid = None
 
     def __smartcopy(self,p,attr):
         '''
@@ -352,8 +385,9 @@ class GPerson():
         self.__smartcopy(p,"death")
         self.__smartcopy(p,"deathplace")
         self.__smartcopy(p,"deathplacecode")
+        self.mref = p.mref
+        self.fref = p.fref
         # Does it work ?
-        self.pref = p.pref
         self.family = p.family
 
     def from_geneanet(self,purl):
@@ -503,6 +537,8 @@ class GPerson():
                         self.childref.append(str(cref))
                         cnum = cnum + 1
     
+                self.fref = ""
+                self.mref = ""
                 self.pref = []
                 for p in parents:
                     if args.verbosity >= 1:
@@ -513,6 +549,7 @@ class GPerson():
                             print('Parent name (L%d): %s'%(LEVEL,pname))
                         except:
                             pname = ""
+                            # if pname is ? ? then go to next one
                         try:
                             pref = p.xpath('a/attribute::href')[0]
                             print('Parent ref:', ROOTURL+pref)
@@ -520,6 +557,14 @@ class GPerson():
                             pref = ""
                         self.pref.append(str(pref))
                         print('-----------------------------------------------------------')
+                try:
+                    self.fref = self.pref[0]
+                except:
+                    self.fref = ""
+                try:
+                    self.mref = self.pref[1]
+                except:
+                    self.mref = ""
     
             else:
                 print(_("We failed to be ok with the server"))
@@ -683,6 +728,8 @@ class GPerson():
  
     def from_gramps(self,gid):
         self.gid = gid
+        if gid == None:
+            return
         try:
             grampsp = db.get_person_from_gramps_id(gid)
             if args.verbosity >= 2:
@@ -703,8 +750,9 @@ class GPerson():
             if args.verbosity >= 1:
                 print("Name: %s %s"%(self.firstname,self.lastname))
         except:
-            db.close()
-            sys.exit(_("Unable to retrieve id %s from the gramps db %s")%(gid,name))
+            if args.verbosity >= 2:
+                print(_("Unable to retrieve id %s from the gramps db %s")%(gid,name))
+
         try:
             bd = get_gramps_date(grampsp,BIRTH,db)
             if bd:
@@ -713,8 +761,8 @@ class GPerson():
             else:
                 print("No Birth date")
         except:
-            db.close()
-            sys.exit(_("Unable to retrieve birth date for id %s")%(gid))
+            if args.verbosity >= 1:
+                print(_("Unable to retrieve birth date for id %s")%(gid))
 
         try:
             dd = get_gramps_date(grampsp,DEATH,db)
@@ -724,14 +772,13 @@ class GPerson():
             else:
                 print("No Death date")
         except:
-            db.close()
-            sys.exit(_("Unable to retrieve death date for id %s")%(gid))
+            if args.verbosity >= 1:
+                print(_("Unable to retrieve death date for id %s")%(gid))
         
         #try:
             #self.childref = get_child_list(db,grampsp)
 
         try:
-            self.pref = []
             fh = grampsp.get_main_parents_family_handle()
             if fh:
                 if args.verbosity >= 1:
@@ -748,7 +795,7 @@ class GPerson():
                     if father:
                         if args.verbosity >= 1:
                             print("Father name:",father.primary_name.get_name())
-                        self.pgid.append(father.gramps_id)
+                        self.fgid = father.gramps_id
                 mh = fam.get_mother_handle()
                 if mh:
                     print("Mother H:",mh)
@@ -756,11 +803,10 @@ class GPerson():
                     if mother:
                         if args.verbosity >= 1:
                             print("Mother name:",mother.primary_name.get_name())
-                        self.pgid.append(mother.gramps_id)
+                        self.mgid = mother.gramps_id
         except:
-            db.close()
-            sys.exit(_("Unable to retrieve family for id %s")%(gid))
-
+            if args.verbosity >= 1:
+                print(_("Unable to retrieve family for id %s")%(gid))
 
 #
 # To be seen later
@@ -791,6 +837,62 @@ def import_data(database, filename, user):
         user.notify_error(errmsg,str(msg))
         return
     return ImportInfo({_("Results"): _("done")})
+
+def geneanet_to_gramps(level, gid, url):
+    '''
+    Function to create a person from Geneanet into gramps
+    '''
+    # Create the Person coming from Gramps
+    gp = GPerson(level)
+    gp.from_gramps(gid)
+
+    # Create the Person coming from Geneanet
+    p = GPerson(level)
+    p.from_geneanet(url)
+
+    # Check we point to the same person
+    if gid != None:
+        if (gp.firstname != p.firstname or gp.lastname != p.lastname) and (not args.force):
+            print("Gramps   person: %s %s"%(gp.firstname,gp.lastname))
+            print("Geneanet person: %s %s"%(p.firstname,p.lastname))
+            db.close()
+            sys.exit("Do not continue without force")
+
+        if (gp.birth != p.birth or gp.death != p.death) and (not args.force):
+            print("Gramps   person birth/death: %s / %s"%(gp.birth,gp.death))
+            print("Geneanet person birth/death: %s / %s"%(p.birth,p.death))
+            db.close()
+            sys.exit("Do not continue without force")
+
+    # Copy from Geneanet into Gramps and commit
+    gp.validate(p)
+    return(gp)
+
+def recurse_parents(level,gp):
+    '''
+    analyze the parents of the person passed in parameter recursively
+    '''
+    # Recurse while we have parents urls and level not reached
+    while level < args.level and (gp.fref != "" or gp.mref != ""):
+        level = level + 1
+        time.sleep(TIMEOUT)
+        gp0 = geneanet_to_gramps(level,gp.fgid,gp.fref)
+        recurse_parents(level,gp0)
+        time.sleep(TIMEOUT)
+        gp1 = geneanet_to_gramps(level,gp.mgid,gp.mref)
+        recurse_parents(level,gp1)
+        f = GFamily(gp0,gp1)
+        f.add_child(gp)
+
+def recurse_children(level,gp):
+    '''
+    analyze the children of the person passed in parameter recursively
+    '''
+    # TODO: probably need the spouse as param
+    # Recurse while we have parents urls and level not reached
+    while level < args.level and (gp.fref != "" or gp.mref != ""):
+        level = level + 1
+        time.sleep(TIMEOUT)
 
 # MAIN
 name = args.grampsfile
@@ -825,63 +927,17 @@ if args.verbosity >= 1 and args.force:
     print("WARNING: Force mode activated")
     time.sleep(TIMEOUT)
 
-# Create the first Person coming from Gramps
-gp = GPerson(0)
-gp.from_gramps(gid)
+# Create the first Person 
+gp = geneanet_to_gramps(0,gid,purl)
 
-# Create the first Person coming from Geneanet
-p = GPerson(0)
-p.from_geneanet(purl)
+if args.ascendants:
+        recurse_parents(LEVEL,gp)
 
-# Check we point to the same person
-if (gp.firstname != p.firstname or gp.lastname != p.lastname) and (not args.force):
-    print("Gramps   person: %s %s"%(gp.firstname,gp.lastname))
-    print("Geneanet person: %s %s"%(p.firstname,p.lastname))
-    db.close()
-    sys.exit("Do not continue without force")
-
-if (gp.birth != p.birth or gp.death != p.death) and (not args.force):
-    print("Gramps   person birth/death: %s / %s"%(gp.birth,gp.death))
-    print("Geneanet person birth/death: %s / %s"%(p.birth,p.death))
-    db.close()
-    sys.exit("Do not continue without force")
-
-# Copy from Geneanet into Gramps and commit
-gp.validate(p)
-
-# Test zone
-gp0 = GPerson(1)
-print("PGID: ",gp.pgid)
-try: 
-    gp0.from_gramps(gp.pgid[0])
-except:
-    pass
-g0 = GPerson(1)
-g0.from_geneanet(p.pref[0])
-gp0.validate(g0)
-
-db.close()
-sys.exit(0)
-
-while args.ascendants and LEVEL < args.level:
-    LEVEL = LEVEL + 1
-    time.sleep(TIMEOUT)
-    if len(p.pref) >= 1:
-        # We have 1 or 2 parents: create family and attach parents and child
-        g0 = GPerson(LEVEL)
-        g0.from_geneanet(p.pref[0])
-        g1 = GPerson(LEVEL)
-        if p.pref[1]:
-            g1.from_geneanet(p.pref[1])
-        if g0.sex == 'H':
-            f = Family(g0,g1)
-        else:
-            f = Family(g1,g0)
-        f.add_child(p)
-        f.validate()
-    else:
-        # We have no parents, stop here
-        pass
+LEVEL = 0
+if args.descendants:
+    while LEVEL < args.level:
+        LEVEL = LEVEL + 1
+        time.sleep(TIMEOUT)
 
 db.close()
 sys.exit(0)
