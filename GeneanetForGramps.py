@@ -58,19 +58,11 @@ from gramps.gen.db import DbTxn
 from gramps.gen.db.utils import open_database
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
-from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType
 #from gramps.gen.utils.location import get_main_location
 #from gramps.version import VERSION
 
 LOG = logging.getLogger("geneanetforgedcom")
-
-GENDER = ['F', 'H', 'I']
-TRAN = None
-
-# Events we manage
-BIRTH = 0
-DEATH = 1
-MARRIAGE = 2
 
 TIMEOUT = 5
 
@@ -96,30 +88,6 @@ from lxml import html
 import requests
 import argparse
 from datetime import datetime
-
-ROOTURL = 'https://gw.geneanet.org/'
-LEVEL = 0
-headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-
-parser = argparse.ArgumentParser(description="Import Geneanet subtrees into Gramps")
-parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity")
-parser.add_argument("-a", "--ascendants", default=False, action='store_true', help="Includes ascendants (off by default)")
-parser.add_argument("-d", "--descendants", default=False, action='store_true', help="Includes descendants (off by default)")
-parser.add_argument("-s", "--spouse", default=False, action='store_true', help="Includes spouse (off by default)")
-parser.add_argument("-l", "--level", default=1, type=int, help="Number of level to explore (1 by default)")
-parser.add_argument("-g", "--grampsfile", type=str, help="Name of the Gramps database")
-parser.add_argument("-i", "--id", type=str, help="ID of the person to start from in Gramps")
-parser.add_argument("-f", "--force", default=False, action='store_true', help="Force processing")
-parser.add_argument("searchedperson", type=str, nargs='?', help="Url of the person to search in Geneanet")
-args = parser.parse_args()
-
-if args.verbosity >= 1:
-    print("LEVEL:",LEVEL)
-if args.searchedperson == None:
-    #purl = 'agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
-    purl = 'agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
-else:
-    purl = args.searchedperson
 
 def format_iso(date_tuple):
     """
@@ -154,11 +122,11 @@ def get_gramps_date(person,evttype,db):
     if args.verbosity >= 3:
         print("EventType: %d"%(evttype))
 
-    if evttype == BIRTH:
+    if evttype == EventType.BIRTH:
         ref = person.get_birth_ref()
-    elif evttype == DEATH:
+    elif evttype == EventType.DEATH:
         ref = person.get_death_ref()
-    elif evttype == MARRIAGE:
+    elif evttype == EventType.MARRIAGE:
         ref = get_marriage_date(db,person)
     else:
         print("Didn't find a known EventType: ",evttype)
@@ -432,6 +400,10 @@ class GPerson():
 
         lxml can return _ElementUnicodeResult instead of str so cast
         '''
+
+        ROOTURL = 'https://gw.geneanet.org/'
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+
 
         if args.verbosity >= 3:
             print("Purl:",purl)
@@ -779,6 +751,9 @@ class GPerson():
             db.request_rebuild()
  
     def from_gramps(self,gid):
+
+        GENDER = ['F', 'H', 'I']
+
         self.gid = gid
         if gid == None:
             return
@@ -804,7 +779,7 @@ class GPerson():
                 print("Gramps Id: %s"%(gid))
         except:
             if args.verbosity >= 2:
-                print(_("Unable to retrieve id %s from the gramps db %s")%(gid,name))
+                print(_("Unable to retrieve id %s from the gramps db %s")%(gid,gname))
             return
 
         try:
@@ -912,7 +887,7 @@ class GPerson():
         '''
         # TODO: probably need the spouse as param
         # Recurse while we have parents urls and level not reached
-        while level <= args.level and (gp.fref != "" or gp.mref != ""):
+        if level <= args.level and (gp.fref != "" or gp.mref != ""):
             level = level + 1
             time.sleep(TIMEOUT)
 
@@ -966,51 +941,79 @@ def geneanet_to_gramps(level, gid, url):
     return(gp)
 
 def main():
-	name = args.grampsfile
-	
-	# TODO: to a backup before opening
-	if name == None:
-	    #name = "Test import"
-	    # To be searched in ~/.gramps/recent-files-gramps.xml
-	    name = "/users/bruno/.gramps/grampsdb/5ec17554"
-	try:
-	    dbstate = DbState()
-	    climanager = CLIManager(dbstate, True, None)
-	    climanager.open_activate(name)
-	    db = dbstate.db
-	except:
-	    ErrorDialog(_("Opening the '%s' database") % name,
-	                _("An attempt to convert the database failed. "
-	                  "Perhaps it needs updating."), parent=self.top)
-	    sys.exit()
-	
-	gid = args.id
-	if gid == None:
-	    gid = "0000"
-	gid = "I"+gid
-	
-	ids = db.get_person_gramps_ids()
-	for i in ids:
-	    if args.verbosity >= 1:
-	        print(i)
-	
-	if args.verbosity >= 1 and args.force:
-	    print("WARNING: Force mode activated")
-	    time.sleep(TIMEOUT)
-	
-	# Create the first Person 
-	gp = geneanet_to_gramps(LEVEL,gid,purl)
-	
-	if args.ascendants:
-	    gp.recurse_parents(LEVEL)
-	
-	LEVEL = 0
-	if args.descendants:
-	    time.sleep(TIMEOUT)
-	
-	db.close()
-	sys.exit(0)
 
-# MAIN
+    # Global vars
+    global args
+    global db
+    global gname
+
+    LEVEL = 0
+
+    parser = argparse.ArgumentParser(description="Import Geneanet subtrees into Gramps")
+    parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity")
+    parser.add_argument("-a", "--ascendants", default=False, action='store_true', help="Includes ascendants (off by default)")
+    parser.add_argument("-d", "--descendants", default=False, action='store_true', help="Includes descendants (off by default)")
+    parser.add_argument("-s", "--spouse", default=False, action='store_true', help="Includes spouse (off by default)")
+    parser.add_argument("-l", "--level", default=1, type=int, help="Number of level to explore (1 by default)")
+    parser.add_argument("-g", "--grampsfile", type=str, help="Name of the Gramps database")
+    parser.add_argument("-i", "--id", type=str, help="ID of the person to start from in Gramps")
+    parser.add_argument("-f", "--force", default=False, action='store_true', help="Force processing")
+    parser.add_argument("searchedperson", type=str, nargs='?', help="Url of the person to search in Geneanet")
+    args = parser.parse_args()
+
+    if args.verbosity >= 1:
+        print("LEVEL:",LEVEL)
+    if args.searchedperson == None:
+        #purl = 'agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
+        purl = 'agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
+    else:
+        purl = args.searchedperson
+
+    gname = args.grampsfile
+	
+    # TODO: to a backup before opening
+    if gname == None:
+        #gname = "Test import"
+        # To be searched in ~/.gramps/recent-files-gramps.xml
+        gname = "/users/bruno/.gramps/grampsdb/5ec17554"
+    try:
+        dbstate = DbState()
+        climanager = CLIManager(dbstate, True, None)
+        climanager.open_activate(gname)
+        db = dbstate.db
+    except:
+        ErrorDialog(_("Opening the '%s' database") % gname,
+                    _("An attempt to convert the database failed. "
+                      "Perhaps it needs updating."), parent=self.top)
+        sys.exit()
+    	
+    gid = args.id
+    if gid == None:
+        gid = "0000"
+    gid = "I"+gid
+    
+    ids = db.get_person_gramps_ids()
+    for i in ids:
+        if args.verbosity >= 1:
+            print(i)
+    
+    if args.verbosity >= 1 and args.force:
+        print("WARNING: Force mode activated")
+        time.sleep(TIMEOUT)
+    
+    # Create the first Person 
+    gp = geneanet_to_gramps(LEVEL,gid,purl)
+    
+    if args.ascendants:
+       gp.recurse_parents(LEVEL)
+    
+    LEVEL = 0
+    if args.descendants:
+        time.sleep(TIMEOUT)
+    
+    db.close()
+    sys.exit(0)
+    
+
 if __name__ == '__main__':
     main()
