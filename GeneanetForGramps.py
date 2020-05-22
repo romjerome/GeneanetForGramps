@@ -213,6 +213,105 @@ def convert_date(datetab):
     bd1 = bd1.join(datetab[idx:])
     bd2 = datetime.strptime(bd1, "%d %B %Y")
     return(bd2.strftime("%Y-%m-%d"))
+        
+def get_or_create_all_event(obj,gobj,attr,tran):
+    '''
+    Create Birth and Death Events for a person 
+    and Marriage Events for a family or get an existing one
+    obj is GPerson or GFamily
+    gobj is a gramps object Person or Family
+    '''
+    
+    event = None
+    # Manages name indirection for person
+    if gobj.__class__.__name__ == 'Person':
+        role = EventRoleType.PRIMARY
+        func = getattr(gobj,'get_'+attr+'_ref')
+        reffunc = func()
+        if reffunc:
+            event = db.get_event_from_handle(reffunc.ref)
+            if args.verbosity >= 2:
+                print("Existing "+attr+" Event")
+    elif gobj.__class__.__name__ == 'Family':
+        role = EventRoleType.FAMILY
+        if attr == 'marriage':
+            marev = None
+            for event_ref in gobj.get_event_ref_list():
+                event = db.get_event_from_handle(event_ref.ref)
+                if (event.get_type() == EventType.MARRIAGE and
+                        (event_ref.get_role() == EventRoleType.FAMILY or
+                         event_ref.get_role() == EventRoleType.PRIMARY)):
+                    marev = event
+            if marev:
+                event = marev
+                if args.verbosity >= 2:
+                    print("Existing "+attr+" Event")
+    else:
+        print("ERROR: Unable to handle class %s in get_or_create_all_event"%(gobj.__class__.__name__))
+                
+    if event is None:
+        event = Event()
+        uptype = getattr(EventType,attr.upper())
+        event.set_type(EventType(uptype))
+        event.set_description('Imported from Geaneanet')
+        db.add_event(event,tran)
+        
+        eventref = EventRef()
+        eventref.set_role(role)
+        eventref.set_reference_handle(event.get_handle())
+        if gobj.__class__.__name__ == 'Person':
+            func = getattr(gobj,'set_'+attr+'_ref')
+            reffunc = func(eventref)
+            db.commit_person(gobj,tran)
+        elif gobj.__class__.__name__ == 'Family':
+            eventref.set_role(EventRoleType.FAMILY)
+            gobj.add_event_ref(eventref)
+            if attr == 'marriage':
+                gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
+            db.commit_family(gobj,tran)
+        if args.verbosity >= 2:
+            print("Creating "+attr+" ("+str(uptype)+") Event")
+
+    # TODO: For families this is a list with an index on spouse !
+    if obj.__dict__[attr] \
+        or obj.__dict__[attr+'place'] \
+        or obj.__dict__[attr+'placecode'] :
+        # TODO: Here we create a new date each time there is a date in object
+        date = Date()
+        if obj.__dict__[attr]:
+            if obj.__dict__[attr][:1] == 'ca':
+                mod = Date.MOD_ABOUT 
+            elif obj.__dict__[attr][:1] == 'av':
+                mod = Date.MOD_BEFORE 
+            elif obj.__dict__[attr][:1] == 'ap':
+                mod = Date.MOD_AFTER 
+            else:
+                mod = Date.MOD_NONE 
+            # ISO string, put in a tuple, reversed
+            tab = obj.__dict__[attr].split('-')
+            date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
+        if args.verbosity >= 2:
+            print("Update "+attr+" Date to "+obj.__dict__[attr])
+        event.set_date_object(date)
+        db.commit_event(event,tran)
+
+        if obj.__dict__[attr+'place'] \
+            or obj.__dict__[attr+'placecode'] :
+            if obj.__dict__[attr+'place']:
+                placename = obj.__dict__[attr+'place']
+            else:
+                placename = ""
+            place = obj.get_or_create_place(event,placename)
+            # TODO: Here we overwrite any existing value.
+            place.set_name(PlaceName(value=placename))
+            if obj.__dict__[attr+'placecode']:
+                place.set_code(obj.__dict__[attr+'placecode'])
+            db.add_place(place,tran)
+            event.set_place_handle(place.get_handle())
+            db.commit_event(event,tran)
+
+    db.commit_event(event,tran)
+    return
 
 class Geneanet(Gramplet):
     '''
@@ -257,6 +356,7 @@ class GFamily():
         self.family = Family()
         with DbTxn("Geneanet import", db) as tran:
             db.add_family(self.family,tran)
+            self.get_or_create_event(self.family,'marriage',tran)
 
             try:
                 grampsp0 = db.get_person_from_gramps_id(gp0.gid)
@@ -315,6 +415,14 @@ class GFamily():
                 db.commit_family(self.family,tran)
                 grampsp.add_parent_family_handle(self.family.get_handle())
                 db.commit_person(grampsp,tran)
+        
+    def get_or_create_event(self,obj,attr,tran):
+        '''
+        Create Marriage Events for this family or get an existing one
+        '''
+        get_or_create_all_event(self,obj,attr,tran)
+        return
+
 
 class GPerson():
     '''
@@ -630,81 +738,12 @@ class GPerson():
         return(place)
 
         
-    def get_or_create_person_event(self,grampsp,attr,tran):
+    def get_or_create_event(self,obj,attr,tran):
         '''
         Create Birth and Death Events for this person or get an existing one
         '''
-        
-        # Manages name indirection
-        func = getattr(grampsp,'get_'+attr+'_ref')
-        reffunc = func()
-        event = None
-        if reffunc:
-            try:
-                event = db.get_event_from_handle(reffunc.ref)
-                eventref = reffunc
-                if args.verbosity >= 2:
-                    print("Existing "+attr+" Event")
-            except:
-                pass
-        if event is None:
-            event = Event()
-            # We manage a person here (for family place False)
-            event.personal = True
-            uptype = getattr(EventType,attr.upper())
-            event.set_type(EventType(uptype))
-            if self.url:
-                event.set_description('Imported from '+self.url)
-            else:
-                event.set_description('Imported from Geaneanet')
-            db.add_event(event,tran)
-            
-            eventref = EventRef()
-            eventref.set_role(EventRoleType.PRIMARY)
-            eventref.set_reference_handle(event.get_handle())
-            func = getattr(grampsp,'set_'+attr+'_ref')
-            reffunc = func(eventref)
-            #p.event_ref_list.append(eventref)
-            if args.verbosity >= 2:
-                print("Creating "+attr+" ("+str(uptype)+") Event, Rank: "+str(grampsp.birth_ref_index))
-
-        if self.__dict__[attr] \
-            or self.__dict__[attr+'place'] \
-            or self.__dict__[attr+'placecode'] :
-            # TODO: Here we create a new date each time there is a date in object
-            date = Date()
-            if self.__dict__[attr]:
-                if self.__dict__[attr][:1] == 'ca':
-                    mod = Date.MOD_ABOUT 
-                elif self.__dict__[attr][:1] == 'av':
-                    mod = Date.MOD_BEFORE 
-                elif self.__dict__[attr][:1] == 'ap':
-                    mod = Date.MOD_AFTER 
-                else:
-                    mod = Date.MOD_NONE 
-                # ISO string, put in a tuple, reversed
-                tab = self.__dict__[attr].split('-')
-                date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
-            if args.verbosity >= 2:
-                print("Update "+attr+" Date to "+self.__dict__[attr])
-            event.set_date_object(date)
-            db.commit_event(event,tran)
-
-            if self.__dict__[attr+'place'] \
-                or self.__dict__[attr+'placecode'] :
-                if self.__dict__[attr+'place']:
-                    placename = self.__dict__[attr+'place']
-                else:
-                    placename = ""
-                place = self.get_or_create_place(event,placename)
-                # TODO: Here we overwrite any existing value.
-                place.set_name(PlaceName(value=placename))
-                if self.__dict__[attr+'placecode']:
-                    place.set_code(self.__dict__[attr+'placecode'])
-                db.add_place(place,tran)
-                event.set_place_handle(place.get_handle())
-                db.commit_event(event,tran)
-        return(event)
+        get_or_create_all_event(self,obj,attr,tran)
+        return
 
     def validate(self,p):
         '''
@@ -743,8 +782,7 @@ class GPerson():
     
             # We need to create events for Birth and Death
             for ev in ['birth', 'death']:
-                e = self.get_or_create_person_event(grampsp,ev,tran)
-                db.commit_event(e,tran)
+                self.get_or_create_event(grampsp,ev,tran)
     
             db.commit_person(grampsp,tran)
             db.enable_signals()
