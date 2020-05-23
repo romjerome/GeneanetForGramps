@@ -295,19 +295,21 @@ def get_or_create_all_event(obj,gobj,attr,tran):
         event.set_type(EventType(uptype))
         event.set_description('Imported from Geaneanet')
         db.add_event(event,tran)
-        
+
         eventref = EventRef()
         eventref.set_role(role)
         eventref.set_reference_handle(event.get_handle())
         if gobj.__class__.__name__ == 'Person':
             func = getattr(gobj,'set_'+attr+'_ref')
             reffunc = func(eventref)
+            db.commit_event(event,tran)
             db.commit_person(gobj,tran)
         elif gobj.__class__.__name__ == 'Family':
             eventref.set_role(EventRoleType.FAMILY)
             gobj.add_event_ref(eventref)
             if attr == 'marriage':
                 gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
+            db.commit_event(event,tran)
             db.commit_family(gobj,tran)
         if args.verbosity >= 2:
             print("Creating "+attr+" ("+str(uptype)+") Event")
@@ -847,7 +849,7 @@ class GPerson():
             if self.url != "":
                 found = False
                 for u in grampsp.get_url_list():
-                    if u.get_type() == UrlType.WEB_HOME
+                    if u.get_type() == UrlType.WEB_HOME \
                     and u.get_path() == self.url:
                         found = True
                 if not found:
