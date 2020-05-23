@@ -322,6 +322,8 @@ def get_or_create_all_event(obj,gobj,attr,tran):
         if obj.__dict__[attr]:
             if obj.__dict__[attr][:1] == 'ca':
                 mod = Date.MOD_ABOUT 
+            if obj.__dict__[attr][:1] == 've':
+                mod = Date.MOD_ABOUT 
             elif obj.__dict__[attr][:1] == 'av':
                 mod = Date.MOD_BEFORE 
             elif obj.__dict__[attr][:1] == 'ap':
@@ -574,6 +576,7 @@ class GPerson():
         self.__smartcopy(p,"marriage")
         self.__smartcopy(p,"marriageplace")
         self.__smartcopy(p,"marriageplacecode")
+        # Recursive copy ?
         self.spouseref = p.spouseref
         self.childref = p.childref
         self.mref = p.mref
@@ -658,7 +661,7 @@ class GPerson():
                 except:
                     self.birth = ""
                 try:
-                    self.birthplace = str(birth[0].split('-')[1].split(',')[0].strip())
+                    self.birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip())
                     if args.verbosity >= 2:
                         print('Birth place:', self.birthplace)
                 except:
@@ -677,7 +680,7 @@ class GPerson():
                 except:
                     self.death = ""
                 try:
-                    self.deathplace = str(death[0].split('-')[1].split(',')[0]).strip()
+                    self.deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip()
                     if args.verbosity >= 2:
                         print('Death place:', self.deathplace)
                 except:
@@ -693,7 +696,6 @@ class GPerson():
                 sname = []
                 sref = []
                 marriage = []
-                children = []
                 for spouse in spouses:
                     try:
                         sname.append(str(spouse.xpath('a/text()')[0]))
@@ -734,10 +736,9 @@ class GPerson():
                     except:
                         self.marriageplacecode.append("")
     
-                    children.append(tree.xpath('//ul[@class="fiche_union"]/li/ul/li'))
                     cnum = 0
                     clist = []
-                    for c in children:
+                    for c in spouse.xpath('ul/li'):
                         try:
                             cname = c.xpath('a/text()')[0]
                             if args.verbosity >= 2:
@@ -753,9 +754,6 @@ class GPerson():
                         clist.append(ROOTURL+str(cref))
                         cnum = cnum + 1
                     self.childref.append(clist)
-                    if args.verbosity >= 2:
-                        for c in self.childref[s]:
-                            print('Child:', c)
                     s = s + 1
                     # End spouse loop
     
@@ -990,16 +988,50 @@ class GPerson():
         if level > args.level:
             if args.verbosity >= 1:
                 print("Stopping exploration as we reached level "+str(level))
+        else:
+            if args.verbosity >= 1:
+                print("Stopping exploration as there are no more parents")
 
-    def recurse_children(level,gp):
+    def recurse_marriage_children(self,level,s):
         '''
-        analyze the children of the person passed in parameter recursively
+        analyze recursively the children of the person passed in parameter 
+        with his spouse (number in the list)
         '''
-        # TODO: probably need the spouse as param
-        # Recurse while we have parents urls and level not reached
-        if level <= args.level and (gp.fref != "" or gp.mref != ""):
+        try:
+            cpt = len(self.childref[s])
+        except:
+            if args.verbosity >= 1:
+                print("Stopping exploration as there are no more children")
+            return
+        # Recurse while we have children urls and level not reached
+        if level <= args.level and (cpt > 0):
             level = level + 1
             time.sleep(TIMEOUT)
+
+            # Create or get their family
+            spouseref = self.spouseref[s]
+            gps = geneanet_to_gramps(level,None,spouseref)
+            if self.sex == 'H':
+                father = self
+                mother = gps
+            else:
+                father = gps
+                mother = self
+            f = GFamily(father,mother)
+            for c in self.childref[s]:
+                # TODO: Assume there is no such child already existing
+                gpc = geneanet_to_gramps(level,None,c)
+                f.add_child(gpc)
+                if args.verbosity >= 2:
+                    print("=> Recursing on the child of "+self.firstname+" "+self.lastname+' : '+gpc.firstname+' '+gpc.lastname)
+                # Recurse with first spouse only for now
+                gpc.recurse_marriage_children(level,0)
+                if args.verbosity >= 2:
+                    print("=> End of recursing on the child of "+self.firstname+" "+self.lastname+' : '+gpc.firstname+' '+gpc.lastname)
+
+        if level > args.level:
+            if args.verbosity >= 1:
+                print("Stopping exploration as we reached level "+str(level))
 
 def import_data(database, filename, user):
 
@@ -1063,7 +1095,7 @@ def main():
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity")
     parser.add_argument("-a", "--ascendants", default=False, action='store_true', help="Includes ascendants (off by default)")
     parser.add_argument("-d", "--descendants", default=False, action='store_true', help="Includes descendants (off by default)")
-    parser.add_argument("-s", "--spouse", default=False, action='store_true', help="Includes spouse (off by default)")
+    parser.add_argument("-s", "--spouse", default=False, action='store_true', help="Includes all spouses (off by default)")
     parser.add_argument("-l", "--level", default=1, type=int, help="Number of level to explore (1 by default)")
     parser.add_argument("-g", "--grampsfile", type=str, help="Name of the Gramps database")
     parser.add_argument("-i", "--id", type=str, help="ID of the person to start from in Gramps")
@@ -1119,6 +1151,8 @@ def main():
     
     LEVEL = 0
     if args.descendants:
+        # First spouse just for now
+        gp.recurse_marriage_children(LEVEL,0)
         time.sleep(TIMEOUT)
     
     db.close()
