@@ -318,8 +318,8 @@ def get_or_create_all_event(obj,gobj,attr,tran):
     if obj.__dict__[attr+'date'] \
         or obj.__dict__[attr+'place'] \
         or obj.__dict__[attr+'placecode'] :
-        # TODO: Here we create a new date each time there is a date in object
-        date = Date()
+        # Get or create the event date
+        date = event.get_date_object()
         if obj.__dict__[attr+'date']:
             if obj.__dict__[attr+'date'][:1] == 'ca':
                 mod = Date.MOD_ABOUT 
