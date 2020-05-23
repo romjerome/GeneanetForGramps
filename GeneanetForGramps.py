@@ -117,54 +117,6 @@ def format_noniso(date_tuple):
     day, month, year = date_tuple
     return(format_iso(year, month, day))
 
-def get_gramps_date(person,evttype,db):
-    '''
-    Give back the date of the event related to the person
-    '''
-
-    if args.verbosity >= 3:
-        print("EventType: %d"%(evttype))
-
-    if evttype == EventType.BIRTH:
-        ref = person.get_birth_ref()
-    elif evttype == EventType.DEATH:
-        ref = person.get_death_ref()
-    elif evttype == EventType.MARRIAGE:
-        ref = get_marriage_date(db,person)
-    else:
-        print("Didn't find a known EventType: ",evttype)
-        return(None)
-
-    if ref:
-        if args.verbosity >= 3:
-            print("Ref:",ref)
-        try:
-            event = db.get_event_from_handle(ref.ref)
-        except:
-            print("Didn't find a known ref for this ref date: ",ref)
-            return(None)
-        if event:
-            if args.verbosity >= 3:
-                print("Event:",event)
-            date = event.get_date_object()
-            tab = date.get_dmy()
-            if args.verbosity >= 3:
-                print("Found date:",tab)
-            if len(tab) == 3:
-                tab = date.get_ymd()
-                if args.verbosity >= 3:
-                    print("Found date2:",tab)
-                ret = format_iso(tab)
-            else:
-                ret = format_noniso(tab)
-            if args.verbosity >= 3:
-                print("Returned date:",ret)
-            return(ret)
-        else:
-            return(None)
-    else:
-        return(None)
-
 def convert_date(datetab):
     ''' Convert the Geneanet date format for birth/death/married lines
     into an ISO date format
@@ -217,146 +169,6 @@ def get_marriage_list(db, person):
         return (marriages)
     return None
 
-def get_or_create_all_place(event,placename):
-    '''
-    Create Place for Events or get an existing one based on the name
-    '''
-    try:
-        pl = event.get_place_handle()
-    except:
-        place = Place()
-        return(place)
-
-    if pl:
-        try:
-            place = db.get_place_from_handle(pl)
-            if args.verbosity >= 2:
-                print("Reuse Place from Event:", placename)
-        except:
-            place = Place()
-    else:
-        keep = None
-        # Check whether our place already exists
-        for handle in db.get_place_handles():
-            pl = db.get_place_from_handle(handle)
-            explace = pl.get_name().value
-            if args.verbosity >= 3:
-                print("DEBUG: search for "+str(placename)+" in "+str(explace))
-            if str(explace) == str(placename):
-                keep = pl
-                break
-        if keep == None:
-            if args.verbosity >= 2:
-                print("Create Place:", placename)
-            place = Place()
-        else:
-            if args.verbosity >= 2:
-                print("Reuse existing Place:", placename)
-            place = keep
-    return(place)
-
-def get_or_create_all_event(obj,gobj,attr,tran):
-    '''
-    Create Birth and Death Events for a person 
-    and Marriage Events for a family or get an existing one
-    obj is GPerson or GFamily
-    gobj is a gramps object Person or Family
-    '''
-    
-    event = None
-    # Manages name indirection for person
-    if gobj.__class__.__name__ == 'Person':
-        role = EventRoleType.PRIMARY
-        func = getattr(gobj,'get_'+attr+'_ref')
-        reffunc = func()
-        if reffunc:
-            event = db.get_event_from_handle(reffunc.ref)
-            if args.verbosity >= 2:
-                print("Existing "+attr+" Event")
-    elif gobj.__class__.__name__ == 'Family':
-        role = EventRoleType.FAMILY
-        if attr == 'marriage':
-            marev = None
-            for event_ref in gobj.get_event_ref_list():
-                event = db.get_event_from_handle(event_ref.ref)
-                if (event.get_type() == EventType.MARRIAGE and
-                        (event_ref.get_role() == EventRoleType.FAMILY or
-                         event_ref.get_role() == EventRoleType.PRIMARY)):
-                    marev = event
-            if marev:
-                event = marev
-                if args.verbosity >= 2:
-                    print("Existing "+attr+" Event")
-    else:
-        print("ERROR: Unable to handle class %s in get_or_create_all_event"%(gobj.__class__.__name__))
-                
-    if event is None:
-        event = Event()
-        uptype = getattr(EventType,attr.upper())
-        event.set_type(EventType(uptype))
-        event.set_description('Imported from Geaneanet')
-        db.add_event(event,tran)
-
-        eventref = EventRef()
-        eventref.set_role(role)
-        eventref.set_reference_handle(event.get_handle())
-        if gobj.__class__.__name__ == 'Person':
-            func = getattr(gobj,'set_'+attr+'_ref')
-            reffunc = func(eventref)
-            db.commit_event(event,tran)
-            db.commit_person(gobj,tran)
-        elif gobj.__class__.__name__ == 'Family':
-            eventref.set_role(EventRoleType.FAMILY)
-            gobj.add_event_ref(eventref)
-            if attr == 'marriage':
-                gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
-            db.commit_event(event,tran)
-            db.commit_family(gobj,tran)
-        if args.verbosity >= 2:
-            print("Creating "+attr+" ("+str(uptype)+") Event")
-
-    if obj.__dict__[attr+'date'] \
-        or obj.__dict__[attr+'place'] \
-        or obj.__dict__[attr+'placecode'] :
-        # Get or create the event date
-        date = event.get_date_object()
-        if obj.__dict__[attr+'date']:
-            if obj.__dict__[attr+'date'][:1] == 'ca':
-                mod = Date.MOD_ABOUT 
-            if obj.__dict__[attr+'date'][:1] == 've':
-                mod = Date.MOD_ABOUT 
-            elif obj.__dict__[attr+'date'][:1] == 'av':
-                mod = Date.MOD_BEFORE 
-            elif obj.__dict__[attr+'date'][:1] == 'ap':
-                mod = Date.MOD_AFTER 
-            else:
-                mod = Date.MOD_NONE 
-            # ISO string, put in a tuple, reversed
-            tab = obj.__dict__[attr+'date'].split('-')
-            date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
-        if args.verbosity >= 2:
-            print("Update "+attr+" Date to "+obj.__dict__[attr+'date'])
-        event.set_date_object(date)
-        db.commit_event(event,tran)
-
-        if obj.__dict__[attr+'place'] \
-            or obj.__dict__[attr+'placecode'] :
-            if obj.__dict__[attr+'place']:
-                placename = obj.__dict__[attr+'place']
-            else:
-                placename = ""
-            place = obj.get_or_create_place(event,placename)
-            # TODO: Here we overwrite any existing value.
-            place.set_name(PlaceName(value=placename))
-            if obj.__dict__[attr+'placecode']:
-                place.set_code(obj.__dict__[attr+'placecode'])
-            db.add_place(place,tran)
-            event.set_place_handle(place.get_handle())
-            db.commit_event(event,tran)
-
-    db.commit_event(event,tran)
-    return
-
 class Geneanet(Gramplet):
     '''
     Gramplet to import Geneanet persons into Gramps
@@ -384,154 +196,15 @@ class Geneanet(Gramplet):
                                event_func=self.cb_double_click)
         return self.view
 
-class GFamily():
-    '''
-    Family as seen by Gramps
-    '''
-    def __init__(self,gp0,gp1):
-        if args.verbosity >= 1:
-            print("Creating Family: "+gp0.lastname+" - "+gp1.lastname)
-        self.marriagedate = ""
-        self.marriageplace = ""
-        self.marriageplacecode = ""
-        self.children = []
-        self.url = gp0.url
-        if self.url == "":
-            self.url = gp1.url
+class GBase:
 
-        # TODO: do these people already form a family, supposing not for now
-        self.family = Family()
-        with DbTxn("Geneanet import", db) as tran:
-            db.add_family(self.family,tran)
+    def __init__(self):
+        pass
 
-            try:
-                grampsp0 = db.get_person_from_gramps_id(gp0.gid)
-            except:
-                if args.verbosity >= 2:
-                    print('No father for this family')
-                grampsp0 = None
-
-            if grampsp0:
-                try:
-                    self.family.set_father_handle(grampsp0.get_handle())
-                except:
-                    if args.verbosity >= 2:
-                        print("Can't affect father to the family")
-
-                db.commit_family(self.family,tran)
-                grampsp0.add_family_handle(self.family.get_handle())
-                db.commit_person(grampsp0,tran)
-
-            try:
-                grampsp1 = db.get_person_from_gramps_id(gp1.gid)
-            except:
-                if args.verbosity >= 2:
-                    print('No mother for this family')
-                grampsp1 = None
-
-            if grampsp1:
-                try:
-                    self.family.set_mother_handle(grampsp1.get_handle())
-                except:
-                    if args.verbosity >= 2:
-                        print("Can't affect mother to the family")
-
-                db.commit_family(self.family,tran)
-                grampsp1.add_family_handle(self.family.get_handle())
-                db.commit_person(grampsp1,tran)
-
-            # Now celebrate the marriage !
-            # We need to find first the right spouse
-            idx = 0
-            for sr in gp0.spouseref:
-                if args.verbosity >= 3:
-                    print('Comparing sr %s to %s (idx: %d)'%(sr,gp1.url,idx))
-                if sr == gp1.url:
-                    break
-                idx = idx + 1
-            if idx < len(gp0.spouseref):
-                # We found one
-                self.marriagedate = gp0.marriagedate[idx]
-                self.marriageplace = gp0.marriageplace[idx]
-                self.marriageplacecode = gp0.marriageplacecode[idx]
-                if args.verbosity >= 2:
-                    print('Marriage found the %s at %s (%s)'%(self.marriagedate,self.marriageplace,self.marriageplacecode))
-            else:
-                if args.verbosity >= 2:
-                    print('No marriage found')
-
-            self.get_or_create_event(self.family,'marriage',tran)
-
-    def add_child(self,child):
-        if args.verbosity >= 1:
-            print("Adding Child : "+child.firstname+" "+child.lastname)
-        childref = ChildRef()
-        try:
-            grampsp = db.get_person_from_gramps_id(child.gid)
-        except:
-            if args.verbosity >= 2:
-                print('No child for this family')
-            grampsp = None
-        if grampsp:
-            try:
-                childref.set_reference_handle(grampsp.get_handle())
-            except:
-                if args.verbosity >= 2:
-                    print('No handle for this child')
-            self.family.add_child_ref(childref)
-            with DbTxn("Geneanet import", db) as tran:
-                db.commit_family(self.family,tran)
-                grampsp.add_parent_family_handle(self.family.get_handle())
-                db.commit_person(grampsp,tran)
-        
-    def get_or_create_event(self,obj,attr,tran):
-        '''
-        Create Marriage Events for this family or get an existing one
-        '''
-        get_or_create_all_event(self,obj,attr,tran)
-        return
-
-    def get_or_create_place(self,event,placename):
-        '''
-        Create Place for Events or get an existing one based on the name
-        '''
-        return(get_or_create_all_place(event,placename))
-        
-
-class GPerson():
-    '''
-    Generic Person common between Gramps and Geneanet
-    '''
-    def __init__(self,level):
-        if args.verbosity >= 3:
-            print("Initialize Person")
-        self.level = level
-        self.firstname = ""
-        self.lastname = ""
-        self.sex = 'I'
-        self.birthdate = None
-        self.birthplace = None
-        self.birthplacecode = None
-        self.deathdate = None
-        self.deathplace = None
-        self.deathplacecode = None
-        self.gid = None
-        self.url = ""
-        self.family = []
-        self.spouseref = []
-        self.marriagedate = []
-        self.marriageplace = []
-        self.marriageplacecode = []
-        self.childref = []
-        self.fref = ""
-        self.mref = ""
-        # Father and Mother id in gramps
-        self.fgid = None
-        self.mgid = None
-
-    def __smartcopy(self,p,attr):
+    def _smartcopy(self,p,attr):
         '''
         Smart Copying an attribute from p into self
+        Works for GPerson and GFamily
         '''
         if args.verbosity >= 3:
             print("Smart Copying Attributes",attr)
@@ -582,25 +255,401 @@ class GPerson():
             if args.verbosity >= 3:
                 print("Not Copying Person attribute (%s, value %s) onto %s"%(attr, self.__dict__[attr],p.__dict__[attr]))
 
+
+    def get_or_create_place(self,event,placename):
+        '''
+        Create Place for Events or get an existing one based on the name
+        '''
+        try:
+            pl = event.get_place_handle()
+        except:
+            place = Place()
+            return(place)
+    
+        if pl:
+            try:
+                place = db.get_place_from_handle(pl)
+                if args.verbosity >= 2:
+                    print("Reuse Place from Event:", place.get_name().value)
+            except:
+                place = Place()
+        else:
+            if placename == None:
+                place = Place()
+                return(place)
+            keep = None
+            # Check whether our place already exists
+            for handle in db.get_place_handles():
+                pl = db.get_place_from_handle(handle)
+                explace = pl.get_name().value
+                if args.verbosity >= 3:
+                    print("DEBUG: search for "+str(placename)+" in "+str(explace))
+                if str(explace) == str(placename):
+                    keep = pl
+                    break
+            if keep == None:
+                if args.verbosity >= 2:
+                    print("Create Place:", placename)
+                place = Place()
+            else:
+                if args.verbosity >= 2:
+                    print("Reuse existing Place:", placename)
+                place = keep
+        return(place)
+    
+    def get_or_create_event(self,gobj,attr,tran):
+        '''
+        Create Birth and Death Events for a person 
+        and Marriage Events for a family or get an existing one
+        self is GPerson or GFamily
+        gobj is a gramps object Person or Family
+        '''
+        
+        event = None
+        # Manages name indirection for person
+        if gobj.__class__.__name__ == 'Person':
+            role = EventRoleType.PRIMARY
+            func = getattr(gobj,'get_'+attr+'_ref')
+            reffunc = func()
+            if reffunc:
+                event = db.get_event_from_handle(reffunc.ref)
+                if args.verbosity >= 2:
+                    print("Existing "+attr+" Event")
+        elif gobj.__class__.__name__ == 'Family':
+            role = EventRoleType.FAMILY
+            if attr == 'marriage':
+                marev = None
+                for event_ref in gobj.get_event_ref_list():
+                    event = db.get_event_from_handle(event_ref.ref)
+                    if (event.get_type() == EventType.MARRIAGE and
+                            (event_ref.get_role() == EventRoleType.FAMILY or
+                             event_ref.get_role() == EventRoleType.PRIMARY)):
+                        marev = event
+                if marev:
+                    event = marev
+                    if args.verbosity >= 2:
+                        print("Existing "+attr+" Event")
+        else:
+            print("ERROR: Unable to handle class %s in get_or_create_all_event"%(gobj.__class__.__name__))
+                    
+        if event is None:
+            event = Event()
+            uptype = getattr(EventType,attr.upper())
+            event.set_type(EventType(uptype))
+            event.set_description('Imported from Geaneanet')
+            db.add_event(event,tran)
+    
+            eventref = EventRef()
+            eventref.set_role(role)
+            eventref.set_reference_handle(event.get_handle())
+            if gobj.__class__.__name__ == 'Person':
+                func = getattr(gobj,'set_'+attr+'_ref')
+                reffunc = func(eventref)
+                db.commit_event(event,tran)
+                db.commit_person(gobj,tran)
+            elif gobj.__class__.__name__ == 'Family':
+                eventref.set_role(EventRoleType.FAMILY)
+                gobj.add_event_ref(eventref)
+                if attr == 'marriage':
+                    gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
+                db.commit_event(event,tran)
+                db.commit_family(gobj,tran)
+            if args.verbosity >= 2:
+                print("Creating "+attr+" ("+str(uptype)+") Event")
+    
+        if self.__dict__[attr+'date'] \
+            or self.__dict__[attr+'place'] \
+            or self.__dict__[attr+'placecode'] :
+            # Get or create the event date
+            date = event.get_date_object()
+            if self.__dict__[attr+'date']:
+                if self.__dict__[attr+'date'][:1] == 'ca':
+                    mod = Date.MOD_ABOUT 
+                if self.__dict__[attr+'date'][:1] == 've':
+                    mod = Date.MOD_ABOUT 
+                elif self.__dict__[attr+'date'][:1] == 'av':
+                    mod = Date.MOD_BEFORE 
+                elif self.__dict__[attr+'date'][:1] == 'ap':
+                    mod = Date.MOD_AFTER 
+                else:
+                    mod = Date.MOD_NONE 
+                # ISO string, put in a tuple, reversed
+                tab = self.__dict__[attr+'date'].split('-')
+                date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
+            if args.verbosity >= 2:
+                print("Update "+attr+" Date to "+self.__dict__[attr+'date'])
+            event.set_date_object(date)
+            db.commit_event(event,tran)
+    
+            if self.__dict__[attr+'place'] \
+                or self.__dict__[attr+'placecode'] :
+                if self.__dict__[attr+'place']:
+                    placename = self.__dict__[attr+'place']
+                else:
+                    placename = ""
+                place = self.get_or_create_place(event,placename)
+                # TODO: Here we overwrite any existing value. 
+                # Check whether that can be a problem
+                place.set_name(PlaceName(value=placename))
+                if self.__dict__[attr+'placecode']:
+                    place.set_code(self.__dict__[attr+'placecode'])
+                db.add_place(place,tran)
+                event.set_place_handle(place.get_handle())
+                db.commit_event(event,tran)
+    
+        db.commit_event(event,tran)
+        return
+
+    def get_gramps_date(self,evttype):
+        '''
+        Give back the date of the event related to the Person or Family
+        '''
+    
+        if args.verbosity >= 3:
+            print("EventType: %d"%(evttype))
+    
+        if not self:
+            return
+    
+        if evttype == EventType.BIRTH:
+            ref = self.get_birth_ref()
+        elif evttype == EventType.DEATH:
+            ref = self.get_death_ref()
+        elif evttype == EventType.MARRIAGE:
+            for eventref in self.get_event_ref_list():
+                event = db.get_event_from_handle(eventref.ref)
+                if (event.get_type() == EventType.MARRIAGE
+                    and (eventref.get_role() == EventRoleType.FAMILY
+                    or eventref.get_role() == EventRoleType.PRIMARY)):
+                        break
+            ref = eventref
+        else:
+            print("Didn't find a known EventType: ",evttype)
+            return(None)
+    
+        if ref:
+            if args.verbosity >= 3:
+                print("Ref:",ref)
+            try:
+                event = db.get_event_from_handle(ref.ref)
+            except:
+                print("Didn't find a known ref for this ref date: ",ref)
+                return(None)
+            if event:
+                if args.verbosity >= 3:
+                    print("Event:",event)
+                date = event.get_date_object()
+                tab = date.get_dmy()
+                if args.verbosity >= 3:
+                    print("Found date:",tab)
+                if len(tab) == 3:
+                    tab = date.get_ymd()
+                    if args.verbosity >= 3:
+                        print("Found date2:",tab)
+                    ret = format_iso(tab)
+                else:
+                    ret = format_noniso(tab)
+                if args.verbosity >= 3:
+                    print("Returned date:",ret)
+                return(ret)
+            else:
+                return(None)
+        else:
+            return(None)
+
+
+class GFamily(GBase):
+    '''
+    Family as seen by Gramps
+    gp0 is the father GPerson
+    gp1 is the mother GPerson
+    '''
+    def __init__(self):
+        self.marriagedate = ""
+        self.marriageplace = ""
+        self.marriageplacecode = ""
+        self.url = ""
+        self.children = []
+        self.family = None
+
+    def create(self,gp0,gp1):
+        if args.verbosity >= 1:
+            print("Creating Family: "+gp0.lastname+" - "+gp1.lastname)
+        self.url = gp0.url
+        if self.url == "":
+            self.url = gp1.url
+
+        # Do these people already form a family
+        for fid in db.get_family_gramps_ids():
+            f = db.get_family_from_gramps_id(fid)
+            fh = f.get_father_handle()
+            fo = db.get_person_from_handle(fh)
+            mh = f.get_mother_handle()
+            mo = db.get_person_from_handle(mh)
+            if gp0.gid == fo.gramps_id and gp1.gid == mo.gramps_id:
+                self.family = f
+                self.marriagedate = f.get_gramps_date(MARRIAGE)
+                for eventref in self.family.get_event_ref_list():
+                    event = db.get_event_from_handle(eventref)
+                    if (event.get_type() == EventType.MARRIAGE
+                    and (eventref.get_role() == EventRoleType.FAMILY
+                    or eventref.get_role() == EventRoleType.PRIMARY)):
+                        place = get_or_create_place(event,None)
+                        self.marriageplace = place.get_name().value
+                        self.marriageplacecode = place.get_code()
+                break
+                if args.verbosity >= 2:
+                    print("Found an existing family "+gp0stname+ " - "+gp1.lastname)
+
+        with DbTxn("Geneanet import", db) as tran:
+            # When it's not the case create the family
+            if self.family == None:
+                self.family = Family()
+                db.add_family(self.family,tran)
+
+                try:
+                    grampsp0 = db.get_person_from_gramps_id(gp0.gid)
+                except:
+                    if args.verbosity >= 2:
+                        print('No father for this family')
+                    grampsp0 = None
+
+                if grampsp0:
+                    try:
+                        self.family.set_father_handle(grampsp0.get_handle())
+                    except:
+                        if args.verbosity >= 2:
+                            print("Can't affect father to the family")
+
+                    db.commit_family(self.family,tran)
+                    grampsp0.add_family_handle(self.family.get_handle())
+                    db.commit_person(grampsp0,tran)
+
+                try:
+                    grampsp1 = db.get_person_from_gramps_id(gp1.gid)
+                except:
+                    if args.verbosity >= 2:
+                        print('No mother for this family')
+                    grampsp1 = None
+
+                if grampsp1:
+                    try:
+                        self.family.set_mother_handle(grampsp1.get_handle())
+                    except:
+                        if args.verbosity >= 2:
+                            print("Can't affect mother to the family")
+
+                    db.commit_family(self.family,tran)
+                    grampsp1.add_family_handle(self.family.get_handle())
+                    db.commit_person(grampsp1,tran)
+
+            # Now celebrate the marriage ! (if needed)
+            # and moreover copy what comes from Geneanet if needed
+            # We need to find first the right spouse
+            idx = 0
+            for sr in gp0.spouseref:
+                if args.verbosity >= 3:
+                    print('Comparing sr %s to %s (idx: %d)'%(sr,gp1.url,idx))
+                if sr == gp1.url:
+                    break
+                idx = idx + 1
+            if idx < len(gp0.spouseref):
+                # We found one
+                tmpf = GFamily()
+                tmpf.marriagedate = gp0.marriagedate[idx]
+                tmpf.marriageplace = gp0.marriageplace[idx]
+                tmpf.marriageplacecode = gp0.marriageplacecode[idx]
+                self.smartcopy(tmpf)
+                if args.verbosity >= 2:
+                    print('Marriage found the %s at %s (%s)'%(self.marriagedate,self.marriageplace,self.marriageplacecode))
+            else:
+                if args.verbosity >= 2:
+                    print('No marriage found')
+
+            self.get_or_create_event(self.family,'marriage',tran)
+
+    def smartcopy(self,f):
+        '''
+        Smart Copying f into self
+        '''
+        if args.verbosity >= 2:
+            print("Smart Copying Family")
+        self._smartcopy(f,"marriagedate")
+        self._smartcopy(f,"marriageplace")
+        self._smartcopy(f,"marriageplacecode")
+
+    def add_child(self,child):
+        if args.verbosity >= 1:
+            print("Adding Child : "+child.firstname+" "+child.lastname)
+        childref = ChildRef()
+        try:
+            grampsp = db.get_person_from_gramps_id(child.gid)
+        except:
+            if args.verbosity >= 2:
+                print('No child for this family')
+            grampsp = None
+        if grampsp:
+            try:
+                childref.set_reference_handle(grampsp.get_handle())
+            except:
+                if args.verbosity >= 2:
+                    print('No handle for this child')
+            self.family.add_child_ref(childref)
+            with DbTxn("Geneanet import", db) as tran:
+                db.commit_family(self.family,tran)
+                grampsp.add_parent_family_handle(self.family.get_handle())
+                db.commit_person(grampsp,tran)
+        
+class GPerson(GBase):
+    '''
+    Generic Person common between Gramps and Geneanet
+    '''
+    def __init__(self,level):
+        if args.verbosity >= 3:
+            print("Initialize Person")
+        self.level = level
+        self.firstname = ""
+        self.lastname = ""
+        self.sex = 'I'
+        self.birthdate = None
+        self.birthplace = None
+        self.birthplacecode = None
+        self.deathdate = None
+        self.deathplace = None
+        self.deathplacecode = None
+        self.gid = None
+        self.url = ""
+        self.family = []
+        self.spouseref = []
+        self.marriagedate = []
+        self.marriageplace = []
+        self.marriageplacecode = []
+        self.childref = []
+        self.fref = ""
+        self.mref = ""
+        # Father and Mother id in gramps
+        self.fgid = None
+        self.mgid = None
+
     def smartcopy(self,p):
         '''
         Smart Copying p into self
         '''
         if args.verbosity >= 2:
             print("Smart Copying Person")
-        self.__smartcopy(p,"firstname")
-        self.__smartcopy(p,"lastname")
-        self.__smartcopy(p,"sex")
-        self.__smartcopy(p,"url")
-        self.__smartcopy(p,"birthdate")
-        self.__smartcopy(p,"birthplace")
-        self.__smartcopy(p,"birthplacecode")
-        self.__smartcopy(p,"deathdate")
-        self.__smartcopy(p,"deathplace")
-        self.__smartcopy(p,"deathplacecode")
-        self.__smartcopy(p,"marriagedate")
-        self.__smartcopy(p,"marriageplace")
-        self.__smartcopy(p,"marriageplacecode")
+        self._smartcopy(p,"firstname")
+        self._smartcopy(p,"lastname")
+        self._smartcopy(p,"sex")
+        self._smartcopy(p,"url")
+        self._smartcopy(p,"birthdate")
+        self._smartcopy(p,"birthplace")
+        self._smartcopy(p,"birthplacecode")
+        self._smartcopy(p,"deathdate")
+        self._smartcopy(p,"deathplace")
+        self._smartcopy(p,"deathplacecode")
+        self._smartcopy(p,"marriagedate")
+        self._smartcopy(p,"marriageplace")
+        self._smartcopy(p,"marriageplacecode")
         # Recursive copy ?
         self.spouseref = p.spouseref
         self.childref = p.childref
@@ -828,19 +877,6 @@ class GPerson():
                 print(_("We failed to be ok with the server"))
 
 
-    def get_or_create_place(self,event,placename):
-        '''
-        Create Place for Events or get an existing one based on the name
-        '''
-        return(get_or_create_all_place(event,placename))
-        
-    def get_or_create_event(self,obj,attr,tran):
-        '''
-        Create Birth and Death Events for this person or get an existing one
-        '''
-        get_or_create_all_event(self,obj,attr,tran)
-        return
-
     def validate(self,p):
         '''
         Validate the GPerson attributes 
@@ -931,7 +967,7 @@ class GPerson():
             return
 
         try:
-            bd = get_gramps_date(grampsp,BIRTH,db)
+            bd = grampsp.get_gramps_date(BIRTH)
             if bd:
                 if args.verbosity >= 1:
                     print("Birth:",bd)
@@ -944,7 +980,7 @@ class GPerson():
                 print(_("WARNING: Unable to retrieve birth date for id %s")%(gid))
 
         try:
-            dd = get_gramps_date(grampsp,DEATH,db)
+            dd = grampsp.get_gramps_date(DEATH)
             if dd:
                 if args.verbosity >= 1:
                     print("Death:",dd)
@@ -1020,7 +1056,8 @@ class GPerson():
                 print("=> End of recursing on the mother of "+self.firstname+" "+self.lastname+' : '+mother.firstname+' '+mother.lastname)
             if args.verbosity >= 2:
                 print("=> Initialize Family of "+self.firstname+" "+self.lastname)
-            f = GFamily(father,mother)
+            f = GFamily()
+            f.create(father,mother)
 
             # Now do what is needed depending on options
             if args.descendants:
@@ -1061,7 +1098,8 @@ class GPerson():
             else:
                 father = gps
                 mother = self
-            f = GFamily(father,mother)
+            f = GFamily()
+            f.create(father,mother)
             for c in self.childref[s]:
                 # TODO: Assume there is no such child already existing
                 gpc = geneanet_to_gramps(level,None,c)
