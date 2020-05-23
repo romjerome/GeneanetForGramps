@@ -58,7 +58,7 @@ from gramps.gen.db import DbTxn
 from gramps.gen.db.utils import open_database
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
-from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType, Url, UrlType
 #from gramps.gen.utils.location import get_main_location
 #from gramps.version import VERSION
 
@@ -390,6 +390,9 @@ class GFamily():
         self.marriageplace = ""
         self.marriageplacecode = ""
         self.children = []
+        self.url = gp0.url
+        if self.url == "":
+            self.url = gp1.url
 
         # TODO: do these people already form a family, supposing not for now
         self.family = Family()
@@ -508,7 +511,7 @@ class GPerson():
         self.deathplace = None
         self.deathplacecode = None
         self.gid = None
-        self.url = None
+        self.url = ""
         self.family = []
         self.spouseref = []
         self.marriage = []
@@ -585,6 +588,7 @@ class GPerson():
         lxml can return _ElementUnicodeResult instead of str so cast
         '''
 
+        # Needed as Geneanet returned relative links
         ROOTURL = 'https://gw.geneanet.org/'
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
@@ -594,15 +598,14 @@ class GPerson():
         if not purl:
             return()
         try:
-            p = ROOTURL+purl
             if args.verbosity >= 1:
                 print('-----------------------------------------------------------')
-                print("Page considered:",p)
-            page = requests.get(p)
+                print("Page considered:",purl)
+            page = requests.get(purl)
             if args.verbosity >= 3:
                 print(_("Return code:"),page.status_code)
         except:
-            print("We failed to reach the server at",p)
+            print("We failed to reach the server at",purl)
         else:
             if page.ok:
                 try:
@@ -703,7 +706,7 @@ class GPerson():
                             print('Spouse ref:', ROOTURL+sref[s])
                     except:
                         sref.append("")
-                    self.spouseref.append(sref[s])
+                    self.spouseref.append(ROOTURL+sref[s])
 
                     try:
                         marriage.append(str(spouse.xpath('em/text()')[0]))
@@ -729,21 +732,23 @@ class GPerson():
                     except:
                         self.marriageplacecode.append("")
     
-                    children.append(spouse.xpath('ul/li'))
+                    children.append(tree.xpath('//ul[@class="fiche_union"]/li/ul/li'))
                     cnum = 0
                     clist = []
                     for c in children:
                         try:
                             cname = c.xpath('a/text()')[0]
-                            print('Child %d name: %s'%(cnum,cname))
+                            if args.verbosity >= 2:
+                                print('Child %d name: %s'%(cnum,cname))
                         except:
                             cname = ""
                         try:
                             cref = c.xpath('a/attribute::href')[0]
-                            print('Child %d ref: %s'%(cnum,ROOTURL+cref))
+                            if args.verbosity >= 2:
+                                print('Child %d ref: %s'%(cnum,ROOTURL+cref))
                         except:
                             cref = ""
-                        clist.append(str(cref))
+                        clist.append(ROOTURL+str(cref))
                         cnum = cnum + 1
                     self.childref.append(clist)
                     if args.verbosity >= 2:
@@ -770,7 +775,7 @@ class GPerson():
                             print('Parent ref:', ROOTURL+pref)
                         except:
                             pref = ""
-                        self.pref.append(str(pref))
+                        self.pref.append(ROOTURL+str(pref))
                 try:
                     self.fref = self.pref[0]
                 except:
@@ -837,7 +842,21 @@ class GPerson():
             # We need to create events for Birth and Death
             for ev in ['birth', 'death']:
                 self.get_or_create_event(grampsp,ev,tran)
-    
+
+            # Store the importation place as an Internet note
+            if self.url != "":
+                found = False
+                for u in grampsp.get_url_list():
+                    if u.get_type() == UrlType.WEB_HOME
+                    and u.get_path() == self.url:
+                        found = True
+                if not found:
+                    url = Url()
+                    url.set_description("Imported from Geneanet")
+                    url.set_type(UrlType.WEB_HOME)
+                    url.set_path(self.url)
+                    grampsp.add_url(url)
+ 
             db.commit_person(grampsp,tran)
             db.enable_signals()
             db.request_rebuild()
@@ -1053,8 +1072,8 @@ def main():
     if args.verbosity >= 1:
         print("LEVEL:",LEVEL)
     if args.searchedperson == None:
-        #purl = 'agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
-        purl = 'agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
+        #purl = 'https://gw.geneanet.org/agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
+        purl = 'https://gw.geneanet.org/agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
     else:
         purl = args.searchedperson
 
