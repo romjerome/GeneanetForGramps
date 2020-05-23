@@ -30,6 +30,7 @@ import os
 import time
 import io
 import sys
+import re
 
 #------------------------------------------------------------------------
 #
@@ -314,27 +315,27 @@ def get_or_create_all_event(obj,gobj,attr,tran):
         if args.verbosity >= 2:
             print("Creating "+attr+" ("+str(uptype)+") Event")
 
-    if obj.__dict__[attr] \
+    if obj.__dict__[attr+'date'] \
         or obj.__dict__[attr+'place'] \
         or obj.__dict__[attr+'placecode'] :
         # TODO: Here we create a new date each time there is a date in object
         date = Date()
-        if obj.__dict__[attr]:
-            if obj.__dict__[attr][:1] == 'ca':
+        if obj.__dict__[attr+'date']:
+            if obj.__dict__[attr+'date'][:1] == 'ca':
                 mod = Date.MOD_ABOUT 
-            if obj.__dict__[attr][:1] == 've':
+            if obj.__dict__[attr+'date'][:1] == 've':
                 mod = Date.MOD_ABOUT 
-            elif obj.__dict__[attr][:1] == 'av':
+            elif obj.__dict__[attr+'date'][:1] == 'av':
                 mod = Date.MOD_BEFORE 
-            elif obj.__dict__[attr][:1] == 'ap':
+            elif obj.__dict__[attr+'date'][:1] == 'ap':
                 mod = Date.MOD_AFTER 
             else:
                 mod = Date.MOD_NONE 
             # ISO string, put in a tuple, reversed
-            tab = obj.__dict__[attr].split('-')
+            tab = obj.__dict__[attr+'date'].split('-')
             date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
         if args.verbosity >= 2:
-            print("Update "+attr+" Date to "+obj.__dict__[attr])
+            print("Update "+attr+" Date to "+obj.__dict__[attr+'date'])
         event.set_date_object(date)
         db.commit_event(event,tran)
 
@@ -390,7 +391,7 @@ class GFamily():
     def __init__(self,gp0,gp1):
         if args.verbosity >= 1:
             print("Creating Family: "+gp0.lastname+" - "+gp1.lastname)
-        self.marriage = ""
+        self.marriagedate = ""
         self.marriageplace = ""
         self.marriageplacecode = ""
         self.children = []
@@ -450,11 +451,11 @@ class GFamily():
                 idx = idx + 1
             if idx < len(gp0.spouseref):
                 # We found one
-                self.marriage = gp0.marriage[idx]
+                self.marriagedate = gp0.marriagedate[idx]
                 self.marriageplace = gp0.marriageplace[idx]
                 self.marriageplacecode = gp0.marriageplacecode[idx]
                 if args.verbosity >= 2:
-                    print('Marriage found the %s at %s (%s)'%(self.marriage,self.marriageplace,self.marriageplacecode))
+                    print('Marriage found the %s at %s (%s)'%(self.marriagedate,self.marriageplace,self.marriageplacecode))
             else:
                 if args.verbosity >= 2:
                     print('No marriage found')
@@ -508,17 +509,17 @@ class GPerson():
         self.firstname = ""
         self.lastname = ""
         self.sex = 'I'
-        self.birth = None
+        self.birthdate = None
         self.birthplace = None
         self.birthplacecode = None
-        self.death = None
+        self.deathdate = None
         self.deathplace = None
         self.deathplacecode = None
         self.gid = None
         self.url = ""
         self.family = []
         self.spouseref = []
-        self.marriage = []
+        self.marriagedate = []
         self.marriageplace = []
         self.marriageplacecode = []
         self.childref = []
@@ -551,6 +552,30 @@ class GPerson():
         if attr == 'sex' and self.__dict__[attr] == 'I':
             scopy = True
 
+        # Copy only if code is more precise
+        match = re.search(r'code$', attr)
+        if match:
+            if not self.__dict__[attr]:
+                scopy = True
+            else:
+                if not p.__dict__[attr]:
+                    scopy = False
+                else:
+                    if int(self.__dict__[attr]) < int(p.__dict__[attr]):
+                        scopy = True
+
+        # Copy only if date is more precise
+        match = re.search(r'date$', attr)
+        if match:
+            if not self.__dict__[attr]:
+                scopy = True
+            else:
+                if not p.__dict__[attr]:
+                    scopy = False
+                else:
+                    if int(self.__dict__[attr]) < int(p.__dict__[attr]):
+                        scopy = True
+
         if scopy:
             self.__dict__[attr] = p.__dict__[attr]
         else:
@@ -567,13 +592,13 @@ class GPerson():
         self.__smartcopy(p,"lastname")
         self.__smartcopy(p,"sex")
         self.__smartcopy(p,"url")
-        self.__smartcopy(p,"birth")
+        self.__smartcopy(p,"birthdate")
         self.__smartcopy(p,"birthplace")
         self.__smartcopy(p,"birthplacecode")
-        self.__smartcopy(p,"death")
+        self.__smartcopy(p,"deathdate")
         self.__smartcopy(p,"deathplace")
         self.__smartcopy(p,"deathplacecode")
-        self.__smartcopy(p,"marriage")
+        self.__smartcopy(p,"marriagedate")
         self.__smartcopy(p,"marriageplace")
         self.__smartcopy(p,"marriageplacecode")
         # Recursive copy ?
@@ -657,9 +682,9 @@ class GPerson():
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
                     if args.verbosity >= 2:
                         print('Birth:', ld)
-                    self.birth = ld
+                    self.birthdate = ld
                 except:
-                    self.birth = ""
+                    self.birthdate = ""
                 try:
                     self.birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip())
                     if args.verbosity >= 2:
@@ -667,18 +692,22 @@ class GPerson():
                 except:
                     self.birthplace = ""
                 try:
-                    self.birthplacecode = str(birth[0].split('-')[1].split(',')[1]).strip()
-                    if args.verbosity >= 2:
-                        print('Birth place code:', self.birthplacecode)
+                    self.birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
+                    match = re.search(r'\d\d\d\d\d', self.birthplacecode)
+                    if not match:
+                        self.birthplacecode = ""
+                    else:
+                        if args.verbosity >= 2:
+                            print('Birth place code:', self.birthplacecode)
                 except:
                     self.birthplacecode = ""
                 try:
                     ld = convert_date(death[0].split('-')[0].split()[1:])
                     if args.verbosity >= 2:
                         print('Death:', ld)
-                    self.death = ld
+                    self.deathdate = ld
                 except:
-                    self.death = ""
+                    self.deathdate = ""
                 try:
                     self.deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip()
                     if args.verbosity >= 2:
@@ -686,9 +715,13 @@ class GPerson():
                 except:
                     self.deathplace = ""
                 try:
-                    self.deathplacecode = str(death[0].split('-')[1].split(',')[1]).strip()
-                    if args.verbosity >= 2:
-                        print('Death place code:', self.deathplacecode)
+                    self.deathplacecode = str(' '.join(death[0].split('-')[1:]).split(',')[1]).strip()
+                    match = re.search(r'\d\d\d\d\d', self.deathplacecode)
+                    if not match:
+                        self.deathplacecode = ""
+                    else:
+                        if args.verbosity >= 2:
+                            print('Death place code:', self.deathplacecode)
                 except:
                     self.deathplacecode = ""
 
@@ -720,9 +753,9 @@ class GPerson():
                         ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if args.verbosity >= 2:
                             print('Married:', ld)
-                        self.marriage.append(ld)
+                        self.marriagedate.append(ld)
                     except:
-                        self.marriage.append("")
+                        self.marriagedate.append("")
                     try:
                         self.marriageplace.append(str(marriage[s].split(',')[1][1:]))
                         if args.verbosity >= 2:
@@ -731,8 +764,12 @@ class GPerson():
                         self.marriageplace.append("")
                     try:
                         self.marriageplacecode.append(str(marriage[s].split(',')[2][1:]))
-                        if args.verbosity >= 2:
-                            print('Married place code:', self.marriageplacecode[s])
+                        match = re.search(r'\d\d\d\d\d', self.marriageplacecode)
+                        if not match:
+                            self.marriageplacecode = ""
+                        else:
+                            if args.verbosity >= 2:
+                                print('Married place code:', self.marriageplacecode[s])
                     except:
                         self.marriageplacecode.append("")
     
@@ -898,7 +935,7 @@ class GPerson():
             if bd:
                 if args.verbosity >= 1:
                     print("Birth:",bd)
-                self.birth = bd
+                self.birthdate = bd
             else:
                 if args.verbosity >= 1:
                     print("No Birth date")
@@ -911,7 +948,7 @@ class GPerson():
             if dd:
                 if args.verbosity >= 1:
                     print("Death:",dd)
-                self.death = dd
+                self.deathdate = dd
             else:
                 if args.verbosity >= 1:
                     print("No Death date")
@@ -984,7 +1021,14 @@ class GPerson():
             if args.verbosity >= 2:
                 print("=> Initialize Family of "+self.firstname+" "+self.lastname)
             f = GFamily(father,mother)
-            f.add_child(self)
+
+            # Now do what is needed depending on options
+            if args.descendants:
+                # TODO: First spouse just for now
+                father.recurse_marriage_children(level,0)
+            else:
+                f.add_child(self)
+    
         if level > args.level:
             if args.verbosity >= 1:
                 print("Stopping exploration as we reached level "+str(level))
@@ -1072,9 +1116,9 @@ def geneanet_to_gramps(level, gid, url):
             db.close()
             sys.exit("Do not continue without force")
 
-        if (gp.birth != p.birth or gp.death != p.death) and (not args.force):
-            print("Gramps   person birth/death: %s / %s"%(gp.birth,gp.death))
-            print("Geneanet person birth/death: %s / %s"%(p.birth,p.death))
+        if (gp.birthdate != p.birthdate or gp.deathdate != p.deathdate) and (not args.force):
+            print("Gramps   person birth/death: %s / %s"%(gp.birthdate,gp.deathdate))
+            print("Geneanet person birth/death: %s / %s"%(p.birthdate,p.deathdate))
             db.close()
             sys.exit("Do not continue without force")
 
@@ -1113,7 +1157,7 @@ def main():
 
     gname = args.grampsfile
 	
-    # TODO: to a backup before opening
+    # TODO: do a backup before opening
     if gname == None:
         #gname = "Test import"
         # To be searched in ~/.gramps/recent-files-gramps.xml
@@ -1151,9 +1195,8 @@ def main():
     
     LEVEL = 0
     if args.descendants:
-        # First spouse just for now
+        # TODO: First spouse just for now
         gp.recurse_marriage_children(LEVEL,0)
-        time.sleep(TIMEOUT)
     
     db.close()
     sys.exit(0)
