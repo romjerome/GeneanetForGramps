@@ -89,6 +89,8 @@ import requests
 import argparse
 from datetime import datetime
 
+# Generic functions
+
 def format_iso(date_tuple):
     """
     Format an iso date.
@@ -162,6 +164,26 @@ def get_gramps_date(person,evttype,db):
     else:
         return(None)
 
+def convert_date(datetab):
+    ''' Convert the Geneanet date format for birth/death/married lines
+    into an ISO date format
+    '''
+
+    if args.verbosity >= 3:
+        print("datetab received:",datetab)
+
+    if len(datetab) == 0:
+        return("")
+    idx = 0
+    if datetab[0] == 'le':
+        idx = 1
+    if datetab[idx] == "1er":
+        datetab[idx] = "1"
+    bd1 = " "
+    bd1 = bd1.join(datetab[idx:])
+    bd2 = datetime.strptime(bd1, "%d %B %Y")
+    return(bd2.strftime("%Y-%m-%d"))
+        
 def get_child_list(db, person, spouse):
     "return list of children for given person or None"
     children = []
@@ -194,26 +216,44 @@ def get_marriage_list(db, person):
         return (marriages)
     return None
 
-def convert_date(datetab):
-    ''' Convert the Geneanet date format for birth/death/married lines
-    into an ISO date format
+def get_or_create_all_place(event,placename):
     '''
+    Create Place for Events or get an existing one based on the name
+    '''
+    try:
+        pl = event.get_place_handle()
+    except:
+        place = Place()
+        return(place)
 
-    if args.verbosity >= 3:
-        print("datetab received:",datetab)
+    if pl:
+        try:
+            place = db.get_place_from_handle(pl)
+            if args.verbosity >= 2:
+                print("Reuse Place from Event:", placename)
+        except:
+            place = Place()
+    else:
+        keep = None
+        # Check whether our place already exists
+        for handle in db.get_place_handles():
+            pl = db.get_place_from_handle(handle)
+            explace = pl.get_name().value
+            if args.verbosity >= 3:
+                print("DEBUG: search for "+str(placename)+" in "+str(explace))
+            if str(explace) == str(placename):
+                keep = pl
+                break
+        if keep == None:
+            if args.verbosity >= 2:
+                print("Create Place:", placename)
+            place = Place()
+        else:
+            if args.verbosity >= 2:
+                print("Reuse existing Place:", placename)
+            place = keep
+    return(place)
 
-    if len(datetab) == 0:
-        return("")
-    idx = 0
-    if datetab[0] == 'le':
-        idx = 1
-    if datetab[idx] == "1er":
-        datetab[idx] = "1"
-    bd1 = " "
-    bd1 = bd1.join(datetab[idx:])
-    bd2 = datetime.strptime(bd1, "%d %B %Y")
-    return(bd2.strftime("%Y-%m-%d"))
-        
 def get_or_create_all_event(obj,gobj,attr,tran):
     '''
     Create Birth and Death Events for a person 
@@ -272,7 +312,6 @@ def get_or_create_all_event(obj,gobj,attr,tran):
         if args.verbosity >= 2:
             print("Creating "+attr+" ("+str(uptype)+") Event")
 
-    # TODO: For families this is a list with an index on spouse !
     if obj.__dict__[attr] \
         or obj.__dict__[attr+'place'] \
         or obj.__dict__[attr+'placecode'] :
@@ -347,16 +386,15 @@ class GFamily():
     def __init__(self,gp0,gp1):
         if args.verbosity >= 1:
             print("Creating Family: "+gp0.lastname+" - "+gp1.lastname)
-        self.marriage = None
-        self.marriageplace = None
-        self.marriageplacecode = None
+        self.marriage = ""
+        self.marriageplace = ""
+        self.marriageplacecode = ""
         self.children = []
 
         # TODO: do these people already form a family, supposing not for now
         self.family = Family()
         with DbTxn("Geneanet import", db) as tran:
             db.add_family(self.family,tran)
-            self.get_or_create_event(self.family,'marriage',tran)
 
             try:
                 grampsp0 = db.get_person_from_gramps_id(gp0.gid)
@@ -394,6 +432,28 @@ class GFamily():
                 grampsp1.add_family_handle(self.family.get_handle())
                 db.commit_person(grampsp1,tran)
 
+            # Now celebrate the marriage !
+            # We need to find first the right spouse
+            idx = 0
+            for sr in gp0.spouseref:
+                if args.verbosity >= 3:
+                    print('Comparing sr %s to %s (idx: %d)'%(sr,gp1.url,idx))
+                if sr == gp1.url:
+                    break
+                idx = idx + 1
+            if idx < len(gp0.spouseref):
+                # We found one
+                self.marriage = gp0.marriage[idx]
+                self.marriageplace = gp0.marriageplace[idx]
+                self.marriageplacecode = gp0.marriageplacecode[idx]
+                if args.verbosity >= 2:
+                    print('Marriage found the %s at %s (%s)'%(self.marriage,self.marriageplace,self.marriageplacecode))
+            else:
+                if args.verbosity >= 2:
+                    print('No marriage found')
+
+            self.get_or_create_event(self.family,'marriage',tran)
+
     def add_child(self,child):
         if args.verbosity >= 1:
             print("Adding Child : "+child.firstname+" "+child.lastname)
@@ -423,6 +483,12 @@ class GFamily():
         get_or_create_all_event(self,obj,attr,tran)
         return
 
+    def get_or_create_place(self,event,placename):
+        '''
+        Create Place for Events or get an existing one based on the name
+        '''
+        return(get_or_create_all_place(event,placename))
+        
 
 class GPerson():
     '''
@@ -444,6 +510,11 @@ class GPerson():
         self.gid = None
         self.url = None
         self.family = []
+        self.spouseref = []
+        self.marriage = []
+        self.marriageplace = []
+        self.marriageplacecode = []
+        self.childref = []
         self.fref = ""
         self.mref = ""
         # Father and Mother id in gramps
@@ -495,10 +566,15 @@ class GPerson():
         self.__smartcopy(p,"death")
         self.__smartcopy(p,"deathplace")
         self.__smartcopy(p,"deathplacecode")
+        self.__smartcopy(p,"marriage")
+        self.__smartcopy(p,"marriageplace")
+        self.__smartcopy(p,"marriageplacecode")
+        self.spouseref = p.spouseref
+        self.childref = p.childref
         self.mref = p.mref
         self.fref = p.fref
-        # Does it work ?
-        self.family = p.family
+        # Useful ?
+        #self.family = p.family
 
     def from_geneanet(self,purl):
         ''' Use XPath to retrieve the details of a person
@@ -534,7 +610,7 @@ class GPerson():
                 except:
                     print(_("Unable to perform HTML analysis"))
     
-                    self.url = purl
+                self.url = purl
                 try:
                     # Should return F or H
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
@@ -566,9 +642,9 @@ class GPerson():
                 except:
                     parents = []
                 try:
-                    spouse = tree.xpath('//ul[@class="fiche_union"]//li]')
+                    spouses = tree.xpath('//ul[@class="fiche_union"]/li')
                 except:
-                    spouse = []
+                    spouses = []
                 try:
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
                     if args.verbosity >= 2:
@@ -608,49 +684,54 @@ class GPerson():
                 except:
                     self.deathplacecode = ""
 
-                for s in spouse:
+                s = 0
+                sname = []
+                sref = []
+                marriage = []
+                children = []
+                for spouse in spouses:
                     try:
-                        sname = str(s.xpath('a/text()')[0])
+                        sname.append(str(spouse.xpath('a/text()')[0]))
                         if args.verbosity >= 2:
-                            print('Spouse name:', sname)
+                            print('Spouse name:', sname[s])
                     except:
-                        sname = ""
+                        sname.append("")
 
                     try:
-                        sref = str(s.xpath('a/attribute::href')[0])
+                        sref.append(str(spouse.xpath('a/attribute::href')[0]))
                         if args.verbosity >= 2:
-                            print('Spouse ref:', ROOTURL+sref)
+                            print('Spouse ref:', ROOTURL+sref[s])
                     except:
-                        sref = ""
-                    self.spouseref = sref
+                        sref.append("")
+                    self.spouseref.append(sref[s])
 
                     try:
-                        married = str(s.xpath('em/text()')[0])
+                        marriage.append(str(spouse.xpath('em/text()')[0]))
                     except: 
-                        married = ""
+                        marriage.append("")
                     try:
-                        ld = convert_date(married.split(',')[0].split()[1:])
+                        ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if args.verbosity >= 2:
                             print('Married:', ld)
-                        self.married = ld
+                        self.marriage.append(ld)
                     except:
-                        self.married = ""
+                        self.marriage.append("")
                     try:
-                        self.marriedplace = str(married.split(',')[1])
+                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]))
                         if args.verbosity >= 2:
-                            print('Married place:', self.marriedplace)
+                            print('Married place:', self.marriageplace[s])
                     except:
-                        self.marriedplace = ""
+                        self.marriageplace.append("")
                     try:
-                        self.marriedplacecode = str(married.split(',')[2])
+                        self.marriageplacecode.append(str(marriage[s].split(',')[2][1:]))
                         if args.verbosity >= 2:
-                            print('Married place code:', self.marriedplacecode)
+                            print('Married place code:', self.marriageplacecode[s])
                     except:
-                        self.marriedplacecode = ""
+                        self.marriageplacecode.append("")
     
-                    children = s.xpath('ul/li[@style="vertical-align:middle;list-style-type:square;"]')
+                    children.append(spouse.xpath('ul/li'))
                     cnum = 0
-                    self.childref = []
+                    clist = []
                     for c in children:
                         try:
                             cname = c.xpath('a/text()')[0]
@@ -662,8 +743,14 @@ class GPerson():
                             print('Child %d ref: %s'%(cnum,ROOTURL+cref))
                         except:
                             cref = ""
-                        self.childref.append(str(cref))
+                        clist.append(str(cref))
                         cnum = cnum + 1
+                    self.childref.append(clist)
+                    if args.verbosity >= 2:
+                        for c in self.childref[s]:
+                            print('Child:', c)
+                    s = s + 1
+                    # End spouse loop
     
                 self.fref = ""
                 self.mref = ""
@@ -703,40 +790,7 @@ class GPerson():
         '''
         Create Place for Events or get an existing one based on the name
         '''
-        try:
-            pl = event.get_place_handle()
-        except:
-            place = Place()
-            return(place)
-
-        if pl:
-            try:
-                place = db.get_place_from_handle(pl)
-                if args.verbosity >= 2:
-                    print("Reuse Place from Event:", placename)
-            except:
-                place = Place()
-        else:
-            keep = None
-            # Check whether our place already exists
-            for handle in db.get_place_handles():
-                pl = db.get_place_from_handle(handle)
-                explace = pl.get_name().value
-                if args.verbosity >= 3:
-                    print("DEBUG: search for "+str(placename)+" in "+str(explace))
-                if str(explace) == str(placename):
-                    keep = pl
-                    break
-            if keep == None:
-                if args.verbosity >= 2:
-                    print("Create Place:", placename)
-                place = Place()
-            else:
-                if args.verbosity >= 2:
-                    print("Reuse existing Place:", placename)
-                place = keep
-        return(place)
-
+        return(get_or_create_all_place(event,placename))
         
     def get_or_create_event(self,obj,attr,tran):
         '''
@@ -817,7 +871,7 @@ class GPerson():
                 print("Gramps Id: %s"%(gid))
         except:
             if args.verbosity >= 2:
-                print(_("Unable to retrieve id %s from the gramps db %s")%(gid,gname))
+                print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
             return
 
         try:
@@ -831,7 +885,7 @@ class GPerson():
                     print("No Birth date")
         except:
             if args.verbosity >= 1:
-                print(_("Unable to retrieve birth date for id %s")%(gid))
+                print(_("WARNING: Unable to retrieve birth date for id %s")%(gid))
 
         try:
             dd = get_gramps_date(grampsp,DEATH,db)
@@ -844,11 +898,8 @@ class GPerson():
                     print("No Death date")
         except:
             if args.verbosity >= 1:
-                print(_("Unable to retrieve death date for id %s")%(gid))
+                print(_("WARNING: Unable to retrieve death date for id %s")%(gid))
         
-        #try:
-            #self.childref = get_child_list(db,grampsp)
-
         try:
             fh = grampsp.get_main_parents_family_handle()
             if fh:
@@ -879,7 +930,7 @@ class GPerson():
                         self.mgid = mother.gramps_id
         except:
             if args.verbosity >= 1:
-                print(_("Unable to retrieve family for id %s")%(gid))
+                print(_("WARNING: Unable to retrieve family for id %s")%(gid))
 
     def recurse_parents(self,level):
         '''
