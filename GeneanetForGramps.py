@@ -441,7 +441,8 @@ class GBase:
         elif evttype == EventType.DEATH:
             ref = self.grampsp.get_death_ref()
         elif evttype == EventType.MARRIAGE:
-            for eventref in self.grampsp.get_event_ref_list():
+            eventref = None
+            for eventref in self.family.get_event_ref_list():
                 event = db.get_event_from_handle(eventref.ref)
                 if (event.get_type() == EventType.MARRIAGE
                     and (eventref.get_role() == EventRoleType.FAMILY
@@ -494,6 +495,7 @@ class GFamily(GBase):
         self.marriagedate = None
         self.marriageplace = None
         self.marriageplacecode = None
+        self.gid = None
         # Pointer to the Gramps Family instance
         self.family = None
         self.children = []
@@ -510,6 +512,44 @@ class GFamily(GBase):
         # TODO: what if father or mother is None
         self.father = father
         self.mother = mother
+
+    def create_grampsf(self):
+        '''
+        Create a Family in Gramps and return it
+        '''
+        with DbTxn("Geneanet import", db) as tran:
+            grampsf = Family()
+            db.add_family(grampsf,tran)
+            self.gid = grampsf.gramps_id
+            self.family = grampsf
+            if args.verbosity >= 2:
+                print("Create new Gramps Family: "+self.gid)
+
+    def find_grampsf(self):
+        '''
+        Find a Family in Gramps and return it
+        '''
+        if args.verbosity >= 2:
+            print("Look for a Gramps Family")
+        f = None
+        ids = db.get_family_gramps_ids()
+        for i in ids:
+            f = db.get_family_from_gramps_id(i)
+            # Do these people already form a family
+            father = None
+            fh = f.get_father_handle()
+            if fh:
+                father = db.get_person_from_handle(fh)
+            mother = None
+            mh = f.get_mother_handle()
+            if mh:
+                mother = db.get_person_from_handle(mh)
+            if self.father and father and father.gramps_id == self.father.gid \
+                and self.mother and mother and mother.gramps_id == self.mother.gid:
+                if args.verbosity >= 2:
+                    print("Found a Gramps Family: "+i)
+                return(f)
+        return(None)
 
     def from_geneanet(self):
         '''
@@ -537,38 +577,51 @@ class GFamily(GBase):
                 print('Geneanet Marriage found the %s at %s (%s)'%(self.g_marriagedate,self.g_marriageplace,self.g_marriageplacecode))
 
 
-    def from_gramps(self):
+    def from_gramps(self,gid):
         '''
         Initiate the GFamily from Gramps data
         '''
-        # Do these people already form a family
-        f = None
-        if self.father and self.father.gid:
-            f = db.get_family_from_gramps_id(self.father.gid)
-        else: 
-            if args.verbosity >= 1:
-                print("WARNING: no father for this family")
-                # TODO: what about a family whose father is unknown
+        if args.verbosity >= 2:
+            print("Calling from_gramps with gid: %s"%(gid))
 
-        if not f and self.mother and self.mother.gid:
-            f = db.get_family_from_gramps_id(self.mother.gid)
-        else: 
-            if args.verbosity >= 1:
-                print("WARNING: no mother for this family")
-                # TODO: what about a family whose mother is unknown
+        # If our gid was already setup and we didn't pass one
+        if not gid and self.gid:
+            gid = self.gid
 
-        self.family = f
-        if f:
-            self.marriagedate = f.get_gramps_date(MARRIAGE)
-            for eventref in f.get_event_ref_list():
-                event = db.get_event_from_handle(eventref)
+        if args.verbosity >= 2:
+            print("Now gid is: %s"%(gid))
+
+        found = None
+        try:
+            found = db.get_family_from_gramps_id(gid)
+            self.gid = gid
+            self.family = found
+            if args.verbosity >= 2:
+                print("Existing Gramps Family: %s"%(self.gid))
+        except:
+            if args.verbosity >= 1:
+                print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
+
+        if not found:
+            # If we don't know which family this is, try to find it in Gramps 
+            # This supposes that Geneanet data are already present in GFamily
+            self.family = self.find_grampsf()
+            # And if we haven't found it, create it in gramps
+            if self.family == None:
+                self.create_grampsf()
+
+        if self.family:
+            self.marriagedate = self.get_gramps_date(EventType.MARRIAGE)
+            for eventref in self.family.get_event_ref_list():
+                event = db.get_event_from_handle(eventref.ref)
                 if (event.get_type() == EventType.MARRIAGE
                 and (eventref.get_role() == EventRoleType.FAMILY
                 or eventref.get_role() == EventRoleType.PRIMARY)):
-                    place = get_or_create_place(event,None)
+                    place = self.get_or_create_place(event,None)
                     self.marriageplace = place.get_name().value
                     self.marriageplacecode = place.get_code()
                     break
+
             if args.verbosity >= 2:
                 print("Found an existing Gramps family "+self.father.lastname+ " - "+self.mother.lastname)
                 if self.marriagedate and self.marriageplace and self.marriageplacecode:
@@ -948,7 +1001,7 @@ class GPerson(GBase):
             self.gid = grampsp.gramps_id
             self.grampsp = grampsp
             if args.verbosity >= 2:
-                print("Create new Gramps Person: "+self.gid+' ('+self.firstname+' '+self.lastname+')')
+                print("Create new Gramps Person: "+self.gid+' ('+self.g_firstname+' '+self.g_lastname+')')
 
 
     def find_grampsp(self):
@@ -969,6 +1022,7 @@ class GPerson(GBase):
                 or gp.deathdate == self.g_deathdate):
                 if args.verbosity >= 2:
                     print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname)
+                #TODO: Useless ?
                 self.gid = p.gramps_id
                 return(p)
         return(None)
@@ -1076,7 +1130,7 @@ class GPerson(GBase):
         if name[1]:
             self.lastname = name[0]
         if args.verbosity >= 1:
-            print("===> Gramps Name of %s: %s %s"%(gid,self.firstname,self.lastname))
+            print("===> Gramps Name of %s: %s %s"%(self.gid,self.firstname,self.lastname))
 
         try:
             bd = self.get_gramps_date(EventType.BIRTH)
@@ -1089,7 +1143,7 @@ class GPerson(GBase):
                     print("No Birth date")
         except:
             if args.verbosity >= 1:
-                print(_("WARNING: Unable to retrieve birth date for id %s")%(gid))
+                print(_("WARNING: Unable to retrieve birth date for id %s")%(self.gid))
 
         try:
             dd = self.get_gramps_date(EventType.DEATH)
@@ -1102,7 +1156,7 @@ class GPerson(GBase):
                     print("No Death date")
         except:
             if args.verbosity >= 1:
-                print(_("WARNING: Unable to retrieve death date for id %s")%(gid))
+                print(_("WARNING: Unable to retrieve death date for id %s")%(self.gid))
         
         # Deal with the parents now, as they necessarily exist
         self.father = GPerson(self.level+1)
@@ -1141,7 +1195,7 @@ class GPerson(GBase):
 
         except:
             if args.verbosity >= 1:
-                print(_("NOTE: Unable to retrieve family for id %s")%(gid))
+                print(_("NOTE: Unable to retrieve family for id %s")%(self.gid))
 
     def recurse_parents(self,level):
         '''
@@ -1175,7 +1229,7 @@ class GPerson(GBase):
                 print("=> Initialize Parents Family of "+self.firstname+" "+self.lastname)
             f = GFamily(self.father,self.mother)
             f.from_geneanet()
-            f.from_gramps()
+            f.from_gramps(f.gid)
             f.to_gramps()
 
             # Now do what is needed depending on options
