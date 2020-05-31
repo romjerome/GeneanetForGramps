@@ -427,7 +427,7 @@ class GBase:
 
     def get_gramps_date(self,evttype):
         '''
-        Give back the date of the event related to the Person or Family
+        Give back the date of the event related to the GPerson or GFamily
         '''
     
         if args.verbosity >= 3:
@@ -486,148 +486,142 @@ class GBase:
 class GFamily(GBase):
     '''
     Family as seen by Gramps
-    gp0 is the father GPerson
-    gp1 is the mother GPerson
     '''
-    def __init__(self):
+    def __init__(self,father,mother):
+        # The 2 GPersons parents in this family should exist
+        # and properties filled before we create the family
+        # Gramps properties
         self.marriagedate = None
         self.marriageplace = None
         self.marriageplacecode = None
-        self.url = ""
-        self.children = []
-        self.father = None
-        self.mother = None
+        # Pointer to the Gramps Family instance
         self.family = None
+        self.children = []
+        # Geneanet properties
+        self.g_marriagedate = None
+        self.g_marriageplace = None
+        self.g_marriageplacecode = None
 
-    def create(self,gp0,gp1):
         if args.verbosity >= 1:
-            print("Creating Family: "+gp0.lastname+" - "+gp1.lastname)
-        self.url = gp0.url
+            print("Creating Family: "+father.lastname+" - "+mother.lastname)
+        self.url = father.url
         if self.url == "":
-            self.url = gp1.url
-        self.father = gp0
-        self.mother = gp1
+            self.url = mother.url
+        # TODO: what if father or mother is None
+        self.father = father
+        self.mother = mother
 
-        # Do these people already form a family
-        for fid in db.get_family_gramps_ids():
-            f = db.get_family_from_gramps_id(fid)
-            fh = f.get_father_handle()
-            # TODO: what about a family whose father is unknown
-            if not fh: 
-                if args.verbosity >= 1:
-                    print("WARNING: no father for this family")
-                    continue
-            fo = db.get_person_from_handle(fh)
-            mh = f.get_mother_handle()
-            # TODO: what about a family whose mother is unknown
-            if not mh:
-                if args.verbosity >= 1:
-                    print("WARNING: no mother for this family")
-                    continue
-            mo = db.get_person_from_handle(mh)
-            if gp0.gid == fo.gramps_id and gp1.gid == mo.gramps_id:
-                self.family = f
-                self.marriagedate = f.get_gramps_date(MARRIAGE)
-                for eventref in self.family.get_event_ref_list():
-                    event = db.get_event_from_handle(eventref)
-                    if (event.get_type() == EventType.MARRIAGE
-                    and (eventref.get_role() == EventRoleType.FAMILY
-                    or eventref.get_role() == EventRoleType.PRIMARY)):
-                        place = get_or_create_place(event,None)
-                        self.marriageplace = place.get_name().value
-                        self.marriageplacecode = place.get_code()
-                break
+    def from_geneanet(self):
+        '''
+        Initiate the GFamily from Geneanet data
+        '''
+        # Once we get the right spouses, then we can have the marriage info
+        idx = 0
+        for sr in self.father.spouseref:
+            if args.verbosity >= 3:
+                print('Comparing sr %s to %s (idx: %d)'%(sr,self.mother.url,idx))
+            if sr == self.mother.url:
                 if args.verbosity >= 2:
-                    print("Found an existing family "+gp0stname+ " - "+gp1.lastname)
+                    print('Spouse %s found (idx: %d)'%(sr,idx))
+                break
+            idx = idx + 1
 
+        if idx < len(self.father.spouseref):
+            # We found one
+            self.g_marriagedate = self.father.marriagedate[idx]
+            self.g_marriageplace = self.father.marriageplace[idx]
+            self.g_marriageplacecode = self.father.marriageplacecode[idx]
+
+        if self.g_marriagedate and self.g_marriageplace and self.g_marriageplacecode:
+            if args.verbosity >= 2:
+                print('Geneanet Marriage found the %s at %s (%s)'%(self.g_marriagedate,self.g_marriageplace,self.g_marriageplacecode))
+
+
+    def from_gramps(self):
+        '''
+        Initiate the GFamily from Gramps data
+        '''
+        # Do these people already form a family
+        f = None
+        if self.father and self.father.gid:
+            f = db.get_family_from_gramps_id(self.father.gid)
+        else: 
+            if args.verbosity >= 1:
+                print("WARNING: no father for this family")
+                # TODO: what about a family whose father is unknown
+
+        if not f and self.mother and self.mother.gid:
+            f = db.get_family_from_gramps_id(self.mother.gid)
+        else: 
+            if args.verbosity >= 1:
+                print("WARNING: no mother for this family")
+                # TODO: what about a family whose mother is unknown
+
+        self.family = f
+        if f:
+            self.marriagedate = f.get_gramps_date(MARRIAGE)
+            for eventref in f.get_event_ref_list():
+                event = db.get_event_from_handle(eventref)
+                if (event.get_type() == EventType.MARRIAGE
+                and (eventref.get_role() == EventRoleType.FAMILY
+                or eventref.get_role() == EventRoleType.PRIMARY)):
+                    place = get_or_create_place(event,None)
+                    self.marriageplace = place.get_name().value
+                    self.marriageplacecode = place.get_code()
+                    break
+            if args.verbosity >= 2:
+                print("Found an existing Gramps family "+self.father.lastname+ " - "+self.mother.lastname)
+                if self.marriagedate and self.marriageplace and self.marriageplacecode:
+                    print('Gramps Marriage found the %s at %s (%s)'%(self.marriagedate,self.marriageplace,self.marriageplacecode))
+
+    def to_gramps(self):
+        '''
+        '''
+        # Smart copy from Geneanet to Gramps inside GFamily
+        self.smartcopy()
         with DbTxn("Geneanet import", db) as tran:
             # When it's not the case create the family
             if self.family == None:
                 self.family = Family()
                 db.add_family(self.family,tran)
 
+            try:
+                grampsp0 = db.get_person_from_gramps_id(self.father.gid)
+            except:
+                if args.verbosity >= 2:
+                    print('No father for this family')
+                grampsp0 = None
+
+            if grampsp0:
                 try:
-                    grampsp0 = db.get_person_from_gramps_id(gp0.gid)
+                    self.family.set_father_handle(grampsp0.get_handle())
                 except:
                     if args.verbosity >= 2:
-                        print('No father for this family')
-                    grampsp0 = None
+                        print("Can't affect father to the family")
 
-                if grampsp0:
-                    try:
-                        self.family.set_father_handle(grampsp0.get_handle())
-                    except:
-                        if args.verbosity >= 2:
-                            print("Can't affect father to the family")
+                db.commit_family(self.family,tran)
+                grampsp0.add_family_handle(self.family.get_handle())
+                db.commit_person(grampsp0,tran)
 
-                    db.commit_family(self.family,tran)
-                    grampsp0.add_family_handle(self.family.get_handle())
-                    db.commit_person(grampsp0,tran)
+            try:
+                grampsp1 = db.get_person_from_gramps_id(self.mother.gid)
+            except:
+                if args.verbosity >= 2:
+                    print('No mother for this family')
+                grampsp1 = None
 
+            if grampsp1:
                 try:
-                    grampsp1 = db.get_person_from_gramps_id(gp1.gid)
+                    self.family.set_mother_handle(grampsp1.get_handle())
                 except:
                     if args.verbosity >= 2:
-                        print('No mother for this family')
-                    grampsp1 = None
+                        print("Can't affect mother to the family")
 
-                if grampsp1:
-                    try:
-                        self.family.set_mother_handle(grampsp1.get_handle())
-                    except:
-                        if args.verbosity >= 2:
-                            print("Can't affect mother to the family")
-
-                    db.commit_family(self.family,tran)
-                    grampsp1.add_family_handle(self.family.get_handle())
-                    db.commit_person(grampsp1,tran)
+                db.commit_family(self.family,tran)
+                grampsp1.add_family_handle(self.family.get_handle())
+                db.commit_person(grampsp1,tran)
 
             # Now celebrate the marriage ! (if needed)
-            # and moreover copy what comes from Geneanet if needed
-            # We need to find first the right spouse
-            idx = 0
-            for sr in gp0.spouseref:
-                if args.verbosity >= 3:
-                    print('Comparing sr %s to %s (idx: %d)'%(sr,gp1.url,idx))
-                if sr == gp1.url:
-                    gp0.spouse.append(gp1)
-                    gp0.family.append(self)
-                    break
-                else:
-                    gp0.spouse.append(None)
-                    gp0.family.append(None)
-                idx = idx + 1
-            if idx < len(gp0.spouseref):
-                # We found one
-                tmpf = GFamily()
-                tmpf.marriagedate = gp0.marriagedate[idx]
-                tmpf.marriageplace = gp0.marriageplace[idx]
-                tmpf.marriageplacecode = gp0.marriageplacecode[idx]
-                # TODO: doesn't work anymore
-                self.smartcopy()
-                # Cross reference spouses
-            idx1 = 0
-            for sr1 in gp1.spouseref:
-                if sr1 == gp0.url:
-                    gp1.spouse.append(gp0)
-                    gp1.family.append(self)
-                    break
-                else:
-                    gp1.spouse.append(None)
-                    gp1.family.append(None)
-                idx1 = idx1 + 1
-            if idx1 < len(gp1.spouseref):
-                # We found one
-                tmpf = GFamily()
-                tmpf.marriagedate = gp1.marriagedate[idx]
-                tmpf.marriageplace = gp1.marriageplace[idx]
-                tmpf.marriageplacecode = gp1.marriageplacecode[idx]
-                # TODO: doesn't work anymore
-                self.smartcopy()
-            if self.marriagedate and self.marriageplace and self.marriageplacecode:
-                if args.verbosity >= 2:
-                    print('Marriage found the %s at %s (%s)'%(self.marriagedate,self.marriageplace,self.marriageplacecode))
-
             self.get_or_create_event(self.family,'marriage',tran)
 
     def smartcopy(self):
@@ -668,7 +662,7 @@ class GPerson(GBase):
     '''
     def __init__(self,level):
         if args.verbosity >= 3:
-            print("Initialize Person")
+            print("Initialize Person at level %d"%(level))
         # Counter
         self.level = level
         # Gramps
@@ -960,17 +954,21 @@ class GPerson(GBase):
     def find_grampsp(self):
         '''
         Find a Person in Gramps and return it
+        The parameter precises the relationship with our person
         '''
+        # TODO: get a param if it's a father, mother, child
         p = None
         ids = db.get_person_gramps_ids()
         for i in ids:
             p = db.get_person_from_gramps_id(i)
-            if p.get_primary_name().get_first_name() == self.firstname \
-            and p.get_primary_name().get_surname() == self.lastname \
-            and (p.get_gramps_date(EventType.BIRTH) == self.birthdate \
-                or p.get_gramps_date(EventType.DEATH) == self.deathdate):
+            gp = GPerson(0)
+            gp.from_gramps(i)
+            if gp.firstname == self.g_firstname \
+            and gp.lastname == self.g_lastname \
+            and (gp.birthdate == self.g_birthdate \
+                or gp.deathdate == self.g_deathdate):
                 if args.verbosity >= 2:
-                    print("Found a Gramps Person: "+self.firstname+' '+self.lastname)
+                    print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname)
                 self.gid = p.gramps_id
                 return(p)
         return(None)
@@ -1026,18 +1024,23 @@ class GPerson(GBase):
             db.commit_person(grampsp,tran)
             db.enable_signals()
             db.request_rebuild()
-            # TODO: and the family and the parents ?
-            #self.family.to_gramps()
-            #self.father.to_gramps()
-            #self.mother.to_gramps()
  
     def from_gramps(self,gid):
+        '''
+        Fill a GPerson with its Gramps data
+        '''
 
         GENDER = ['F', 'H', 'I']
+
+        if args.verbosity >= 2:
+            print("Calling from_gramps with gid: %s"%(gid))
 
         # If our gid was already setup and we didn't pass one
         if not gid and self.gid:
             gid = self.gid
+
+        if args.verbosity >= 2:
+            print("Now gid is: %s"%(gid))
 
         found = None
         try:
@@ -1045,7 +1048,7 @@ class GPerson(GBase):
             self.gid = gid
             self.grampsp = found
             if args.verbosity >= 2:
-                print("Existing Gramps Person:", self.gid)
+                print("Existing Gramps Person: %s"%(self.gid))
         except:
             if args.verbosity >= 1:
                 print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
@@ -1101,7 +1104,9 @@ class GPerson(GBase):
             if args.verbosity >= 1:
                 print(_("WARNING: Unable to retrieve death date for id %s")%(gid))
         
-        # TODO: Now this has to be changed
+        # Deal with the parents now, as they necessarily exist
+        self.father = GPerson(self.level+1)
+        self.mother = GPerson(self.level+1)
         try:
             fh = self.grampsp.get_main_parents_family_handle()
             if fh:
@@ -1111,12 +1116,8 @@ class GPerson(GBase):
                 if fam:
                     if args.verbosity >= 1:
                         print("Family:",fam)
-                    # TODO: create a GFamily with it and do a from_gramps on it
-                    f = GFamily()
-                    f.from_geneanet()
-                    f.from_gramps()
-                    self.family = f
-                # find father from a family
+
+                # find father from the family
                 fh = fam.get_father_handle()
                 if fh:
                     if args.verbosity >= 3:
@@ -1125,8 +1126,9 @@ class GPerson(GBase):
                     if father:
                         if args.verbosity >= 1:
                             print("Father name:",father.primary_name.get_name())
-                        self.fgid = father.gramps_id
-                        # TODO: create a GPerson with it and do a from_gramps on it
+                        self.father.gid = father.gramps_id
+
+                # find mother from the family
                 mh = fam.get_mother_handle()
                 if mh:
                     if args.verbosity >= 3:
@@ -1135,35 +1137,11 @@ class GPerson(GBase):
                     if mother:
                         if args.verbosity >= 1:
                             print("Mother name:",mother.primary_name.get_name())
-                        self.mgid = mother.gramps_id
-                        # TODO: create a GPerson with it and do a from_gramps on it
+                        self.mother.gid = mother.gramps_id
+
         except:
             if args.verbosity >= 1:
                 print(_("NOTE: Unable to retrieve family for id %s")%(gid))
-
-    def is_similar(self,p):
-        '''
-        Return True if 2 GPersons seem identical
-        '''
-
-        ret = True
-        if self.firstname != p.firstname \
-        or self.lastname != p.lastname:
-            ret = False
-        if self.birthdate and p.birthdate:
-            if self.birthdate != p.birthdate:
-                ret = False
-        if self.deathdate and p.deathdate:
-            if self.deathdate != p.deathdate:
-                ret = False
-        if ret:
-            if args.verbosity >= 1:
-                print("GPerson %s and %s are similar")%(self.gid,p.gid)
-            return(True)
-        else:
-            if args.verbosity >= 3:
-                print("GPerson %s and %s are different")%(self.gid,p.gid)
-            return(False)
 
     def recurse_parents(self,level):
         '''
@@ -1173,41 +1151,32 @@ class GPerson(GBase):
         if level <= args.level and (self.fref != "" or self.mref != ""):
             level = level + 1
             time.sleep(TIMEOUT)
-            # TODO: what about pre-existing parent
-            try:
-                fgid = self.father.gid
-            except:
-                fgid = None
-            try:
-                mgid = self.mother.gid
-            except:
-                mgid = None
-            gp0 = geneanet_to_gramps(level,fgid,self.fref)
-            gp1 = geneanet_to_gramps(level,mgid,self.mref)
 
-            # In case there are errors between father and mother, check and fix
-            if gp0.sex == 'H':
-                father = gp0
-                mother = gp1
-            else:
-                father = gp1
-                mother = gp0
+            if self.father:
+                geneanet_to_gramps(self.father,level,self.father.gid,self.fref)
 
+                if args.verbosity >= 2:
+                    print("=> Recursing on the father of "+self.firstname+" "+self.lastname+' : '+self.father.firstname+' '+self.father.lastname)
+                time.sleep(TIMEOUT)
+                self.father.recurse_parents(level)
+                if args.verbosity >= 2:
+                    print("=> End of recursion on the father of "+self.firstname+" "+self.lastname+' : '+self.father.firstname+' '+self.father.lastname)
+
+            if self.mother:
+                geneanet_to_gramps(self.mother,level,self.mother.gid,self.mref)
+                if args.verbosity >= 2:
+                    print("=> Recursing on the mother of "+self.firstname+" "+self.lastname+' : '+self.mother.firstname+' '+self.mother.lastname)
+                self.mother.recurse_parents(level)
+                if args.verbosity >= 2:
+                    print("=> End of recursing on the mother of "+self.firstname+" "+self.lastname+' : '+self.mother.firstname+' '+self.mother.lastname)
+
+            # Create a GFamily with them and do a Geaneanet to Gramps for it
             if args.verbosity >= 2:
-                print("=> Recursing on the father of "+self.firstname+" "+self.lastname+' : '+father.firstname+' '+father.lastname)
-            father.recurse_parents(level)
-            if args.verbosity >= 2:
-                print("=> End of recursion on the father of "+self.firstname+" "+self.lastname+' : '+father.firstname+' '+father.lastname)
-            time.sleep(TIMEOUT)
-            if args.verbosity >= 2:
-                print("=> Recursing on the mother of "+self.firstname+" "+self.lastname+' : '+mother.firstname+' '+mother.lastname)
-            mother.recurse_parents(level)
-            if args.verbosity >= 2:
-                print("=> End of recursing on the mother of "+self.firstname+" "+self.lastname+' : '+mother.firstname+' '+mother.lastname)
-            if args.verbosity >= 2:
-                print("=> Initialize Family of "+self.firstname+" "+self.lastname)
-            f = GFamily()
-            f.create(father,mother)
+                print("=> Initialize Parents Family of "+self.firstname+" "+self.lastname)
+            f = GFamily(self.father,self.mother)
+            f.from_geneanet()
+            f.from_gramps()
+            f.to_gramps()
 
             # Now do what is needed depending on options
             if args.descendants:
@@ -1272,9 +1241,10 @@ class GPerson(GBase):
                 # Compare this person to the one in Gramps and if one matches, update it
                 # If not add it
                 found = None
-                for p in crl:
-                    if gpc.is_similar(p):
-                        found = p
+                # TODO: now something else
+                #for p in crl:
+                    #if gpc.is_similar(p):
+                        #found = p
                 if not found:
                     found = GPerson(level)
                 found.to_gramps()
@@ -1310,12 +1280,13 @@ def import_data(database, filename, user):
         return
     return ImportInfo({_("Results"): _("done")})
 
-def geneanet_to_gramps(level, gid, url):
+def geneanet_to_gramps(p, level, gid, url):
     '''
     Function to create a person from Geneanet into gramps
     '''
     # Create the Person coming from Geneanet
-    p = GPerson(level)
+    if not p:
+        p = GPerson(level)
     p.from_geneanet(url)
 
     # Create the Person coming from Gramps
@@ -1402,7 +1373,7 @@ def main():
         time.sleep(TIMEOUT)
     
     # Create the first Person 
-    gp = geneanet_to_gramps(LEVEL,gid,purl)
+    gp = geneanet_to_gramps(None, LEVEL,gid,purl)
     
     if args.ascendants:
        gp.recurse_parents(LEVEL)
