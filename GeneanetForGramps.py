@@ -41,6 +41,7 @@ from gi.repository import Gtk
 
 from gramps.gen.plug import Gramplet
 from gramps.gui.editors import EditPerson
+from gramps.gui.dialog import ErrorDialog
 from gramps.gen.errors import WindowActiveError, DatabaseError
 from gramps.gen.display.name import displayer as name_displayer
 from gramps.gen.datehandler import get_date
@@ -671,6 +672,7 @@ class GFamily(GBase):
                 if args.verbosity >= 1:
                     print("Child already existing : "+child.firstname+" "+child.lastname)
                 break
+            # Ensure that the child is part of the family
 
         if not found:
             if child:
@@ -699,10 +701,11 @@ class GFamily(GBase):
             if args.verbosity >= 1:
                 print("Stopping exploration as there are no more children")
             return
+        loop = False
         # Recurse while we have children urls and level not reached
         if level <= args.level and (cpt > 0):
+            loop = True
             level = level + 1
-            time.sleep(TIMEOUT)
 
             if not self.family:
                 print("WARNING: No family found whereas there should be one :-(")
@@ -710,23 +713,37 @@ class GFamily(GBase):
 
             # Create a GPerson from all children mentioned in Geneanet
             for c in self.g_childref:
-                child = geneanet_to_gramps(None,level,None,c)
+                child = geneanet_to_gramps(None,level-1,None,c)
                 if args.verbosity >= 2:
                     print("=> Recursion on the child of "+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
                 self.add_child(child)
+
                 fam = []
                 if args.spouses:
                      fam = child.add_spouses(level)
+                     if args.ascendants:
+                         for f in fam:
+                             if child.sex == 'H':
+                                 f.mother.recurse_parents(level-1)
+                             if child.sex == 'F':
+                                 f.father.recurse_parents(level-1)
                      if args.descendants:
                          for f in fam:
-                            f.recurse_children(level)
+                             f.recurse_children(level)
     
                 if args.verbosity >= 2:
                     print("=> End of recursion on the child of "+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
 
-        if level > args.level:
-            if args.verbosity >= 1:
-                print("Stopping exploration as we reached level "+str(level))
+        if not loop:
+            if cpt == 0:
+                if args.verbosity >= 1:
+                    print("Stopping exploration for family "+self.father.lastname+' - '+self.mother.lastname+"as there are no more children")
+                return
+    
+            if level > args.level:
+                if args.verbosity >= 1:
+                    print("Stopping exploration for family "+self.father.lastname+' - '+self.mother.lastname+"as we reached level "+str(level))
+        return
         
 class GPerson(GBase):
     '''
@@ -1028,7 +1045,6 @@ class GPerson(GBase):
         Find a Person in Gramps and return it
         The parameter precises the relationship with our person
         '''
-        # TODO: get a param if it's a father, mother, child
         p = None
         ids = db.get_person_gramps_ids()
         for i in ids:
@@ -1187,7 +1203,7 @@ class GPerson(GBase):
                     print("Family:",fh)
                 fam = db.get_family_from_handle(fh)
                 if fam:
-                    if args.verbosity >= 1:
+                    if args.verbosity >= 3:
                         print("Family:",fam)
 
                 # find father from the family
@@ -1261,10 +1277,11 @@ class GPerson(GBase):
         '''
         analyze the parents of the person passed in parameter recursively
         '''
+        loop = False
         # Recurse while we have parents urls and level not reached
         if level <= args.level and (self.fref != "" or self.mref != ""):
+            loop = True
             level = level + 1
-            time.sleep(TIMEOUT)
 
             if self.father:
                 geneanet_to_gramps(self.father,level,self.father.gid,self.fref)
@@ -1273,7 +1290,6 @@ class GPerson(GBase):
 
                 if args.verbosity >= 2:
                     print("=> Recursing on the father of "+self.firstname+" "+self.lastname+' : '+self.father.firstname+' '+self.father.lastname)
-                time.sleep(TIMEOUT)
                 self.father.recurse_parents(level)
 
                 if args.verbosity >= 2:
@@ -1305,15 +1321,24 @@ class GPerson(GBase):
             # Deal with other spouses
             if args.spouses:
                 fam = self.father.add_spouses(level)
+                if args.ascendants:
+                    for ff in fam:
+                        if ff.gid != f.gid:
+                            ff.mother.recurse_parents(level)
                 if args.descendants:
                     for ff in fam:
                         if ff.gid != f.gid:
                             ff.recurse_children(level)
                 fam = self.mother.add_spouses(level)
+                if args.ascendants:
+                    for mf in fam:
+                        if mf.gid != f.gid:
+                            mf.father.recurse_parents(level)
                 if args.descendants:
                     for mf in fam:
                         if mf.gid != f.gid:
                             mf.recurse_children(level)
+
 
             # Now do what is needed depending on options
             if args.descendants:
@@ -1321,12 +1346,14 @@ class GPerson(GBase):
             else:
                 f.add_child(self)
     
-        if level > args.level:
-            if args.verbosity >= 1:
-                print("Stopping exploration as we reached level "+str(level))
-        else:
-            if args.verbosity >= 1:
-                print("Stopping exploration as there are no more parents")
+        if not loop:
+            if level > args.level:
+                if args.verbosity >= 1:
+                    print("Stopping exploration as we reached level "+str(level))
+            else:
+                if args.verbosity >= 1:
+                    print("Stopping exploration as there are no more parents")
+        return
 
 
 def import_data(database, filename, user):
@@ -1369,6 +1396,16 @@ def geneanet_to_gramps(p, level, gid, url):
             db.close()
             sys.exit("Do not continue without force")
 
+        # Fix potential empty dates
+        if p.g_birthdate == "":
+            p.g_birthdate = None
+        if p.birthdate == "":
+            p.birthdate = None
+        if p.g_deathdate == "":
+            p.g_deathdate = None
+        if p.deathdate == "":
+            p.deathdate = None
+
         if (p.birthdate != p.g_birthdate or p.deathdate != p.g_deathdate) and (not args.force):
             print("Gramps   person birth/death: %s / %s"%(p.birthdate,p.deathdate))
             print("Geneanet person birth/death: %s / %s"%(p.g_birthdate,p.g_deathdate))
@@ -1386,22 +1423,18 @@ def main():
     global db
     global gname
 
-    LEVEL = 0
-
     parser = argparse.ArgumentParser(description="Import Geneanet subtrees into Gramps")
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity")
     parser.add_argument("-a", "--ascendants", default=False, action='store_true', help="Includes ascendants (off by default)")
     parser.add_argument("-d", "--descendants", default=False, action='store_true', help="Includes descendants (off by default)")
     parser.add_argument("-s", "--spouses", default=False, action='store_true', help="Includes all spouses (off by default)")
-    parser.add_argument("-l", "--level", default=1, type=int, help="Number of level to explore (1 by default)")
+    parser.add_argument("-l", "--level", default=2, type=int, help="Number of level to explore (2 by default)")
     parser.add_argument("-g", "--grampsfile", type=str, help="Name of the Gramps database")
     parser.add_argument("-i", "--id", type=str, help="ID of the person to start from in Gramps")
     parser.add_argument("-f", "--force", default=False, action='store_true', help="Force processing")
     parser.add_argument("searchedperson", type=str, nargs='?', help="Url of the person to search in Geneanet")
     args = parser.parse_args()
 
-    if args.verbosity >= 1:
-        print("LEVEL:",LEVEL)
     if args.searchedperson == None:
         #purl = 'https://gw.geneanet.org/agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
         purl = 'https://gw.geneanet.org/agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
@@ -1441,18 +1474,17 @@ def main():
         time.sleep(TIMEOUT)
     
     # Create the first Person 
-    gp = geneanet_to_gramps(None,LEVEL,gid,purl)
+    gp = geneanet_to_gramps(None,0,gid,purl)
     
     if args.ascendants:
-       gp.recurse_parents(LEVEL)
+       gp.recurse_parents(0)
     
     fam = []
     if args.spouses:
-       fam = gp.add_spouses(LEVEL)
+       fam = gp.add_spouses(0)
     if args.descendants:
         for f in fam:
-            LEVEL = 0
-            f.recurse_children(LEVEL)
+            f.recurse_children(0)
     
     db.close()
     sys.exit(0)
