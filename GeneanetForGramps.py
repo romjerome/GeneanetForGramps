@@ -466,11 +466,11 @@ class GFamily(GBase):
         self.gid = None
         # Pointer to the Gramps Family instance
         self.family = None
-        self.children = []
         # Geneanet properties
         self.g_marriagedate = None
         self.g_marriageplace = None
         self.g_marriageplacecode = None
+        self.g_childref = []
 
         if args.verbosity >= 1:
             print("Creating Family: "+father.lastname+" - "+mother.lastname)
@@ -539,6 +539,8 @@ class GFamily(GBase):
             self.g_marriagedate = self.father.marriagedate[idx]
             self.g_marriageplace = self.father.marriageplace[idx]
             self.g_marriageplacecode = self.father.marriageplacecode[idx]
+            for c in self.father.childref[idx]:
+                self.g_childref.append(c)
 
         if self.g_marriagedate and self.g_marriageplace and self.g_marriageplacecode:
             if args.verbosity >= 2:
@@ -656,26 +658,75 @@ class GFamily(GBase):
         self._smartcopy("marriageplacecode")
 
     def add_child(self,child):
-        if args.verbosity >= 1:
-            print("Adding Child : "+child.firstname+" "+child.lastname)
-        childref = ChildRef()
+        '''
+        Adds a child GPerson child to the GFamily
+        '''
+        found = None
+        i = 0
+        # Avoid handling already processed children in Gramps
+        for cr in self.family.get_child_ref_list():
+            c = db.get_person_from_handle(cr.ref)
+            if c.gramps_id == child.gid:
+                found = child
+                if args.verbosity >= 1:
+                    print("Child already existing : "+child.firstname+" "+child.lastname)
+                break
+
+        if not found:
+            if child:
+                if args.verbosity >= 1:
+                    print("Adding Child : "+child.firstname+" "+child.lastname)
+                childref = ChildRef()
+                if child.grampsp:
+                    try:
+                        childref.set_reference_handle(child.grampsp.get_handle())
+                    except:
+                        if args.verbosity >= 2:
+                            print('No handle for this child')
+                    self.family.add_child_ref(childref)
+                    with DbTxn("Geneanet import", db) as tran:
+                        db.commit_family(self.family,tran)
+                        child.grampsp.add_parent_family_handle(self.family.get_handle())
+                        db.commit_person(child.grampsp,tran)
+
+    def recurse_children(self,level):
+        '''
+        analyze recursively the children of the GFamily passed in parameter 
+        '''
         try:
-            grampsp = db.get_person_from_gramps_id(child.gid)
+            cpt = len(self.g_childref)
         except:
-            if args.verbosity >= 2:
-                print('No child for this family')
-            grampsp = None
-        if grampsp:
-            try:
-                childref.set_reference_handle(grampsp.get_handle())
-            except:
+            if args.verbosity >= 1:
+                print("Stopping exploration as there are no more children")
+            return
+        # Recurse while we have children urls and level not reached
+        if level <= args.level and (cpt > 0):
+            level = level + 1
+            time.sleep(TIMEOUT)
+
+            if not self.family:
+                print("WARNING: No family found whereas there should be one :-(")
+                return
+
+            # Create a GPerson from all children mentioned in Geneanet
+            for c in self.g_childref:
+                child = geneanet_to_gramps(None,level,None,c)
                 if args.verbosity >= 2:
-                    print('No handle for this child')
-            self.family.add_child_ref(childref)
-            with DbTxn("Geneanet import", db) as tran:
-                db.commit_family(self.family,tran)
-                grampsp.add_parent_family_handle(self.family.get_handle())
-                db.commit_person(grampsp,tran)
+                    print("=> Recursion on the child of "+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
+                self.add_child(child)
+                fam = []
+                if args.spouses:
+                     fam = child.add_spouses(level)
+                     if args.descendants:
+                         for f in fam:
+                            f.recurse_children(level)
+    
+                if args.verbosity >= 2:
+                    print("=> End of recursion on the child of "+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
+
+        if level > args.level:
+            if args.verbosity >= 1:
+                print("Stopping exploration as we reached level "+str(level))
         
 class GPerson(GBase):
     '''
@@ -1165,11 +1216,13 @@ class GPerson(GBase):
             if args.verbosity >= 1:
                 print(_("NOTE: Unable to retrieve family for id %s")%(self.gid))
 
-    def add_spouse(self,level):
+    def add_spouses(self,level):
         '''
         Add all spouses for this person, with corresponding families
+        returns all the families created in a list
         '''
         i = 0
+        ret = []
         while i < len(self.spouseref):
             spouse = None
             # Avoid handling already processed spouses
@@ -1200,7 +1253,9 @@ class GPerson(GBase):
                 self.family.append(f)
                 if spouse:
                     spouse.family.append(f)
+                ret.append(f)
             i = i + 1
+        return(ret)
 
     def recurse_parents(self,level):
         '''
@@ -1249,15 +1304,21 @@ class GPerson(GBase):
 
             # Deal with other spouses
             if args.spouses:
-                self.father.add_spouse(level)
-                self.mother.add_spouse(level)
+                fam = self.father.add_spouses(level)
+                if args.descendants:
+                    for ff in fam:
+                        if ff.gid != f.gid:
+                            ff.recurse_children(level)
+                fam = self.mother.add_spouses(level)
+                if args.descendants:
+                    for mf in fam:
+                        if mf.gid != f.gid:
+                            mf.recurse_children(level)
 
             # Now do what is needed depending on options
             if args.descendants:
-                # TODO: First spouse just for now
-                father.recurse_children(level,0)
+                f.recurse_children(level)
             else:
-                # TODO: What about existing children ?
                 f.add_child(self)
     
         if level > args.level:
@@ -1267,73 +1328,6 @@ class GPerson(GBase):
             if args.verbosity >= 1:
                 print("Stopping exploration as there are no more parents")
 
-    def recurse_children(self,level,s):
-        '''
-        analyze recursively the children of the person passed in parameter 
-        with his spouse (number in the list)
-        '''
-        try:
-            cpt = len(self.childref[s])
-        except:
-            if args.verbosity >= 1:
-                print("Stopping exploration as there are no more children")
-            return
-        # Recurse while we have children urls and level not reached
-        if level <= args.level and (cpt > 0):
-            level = level + 1
-            time.sleep(TIMEOUT)
-
-            # Create or get their spouse and corresponding family
-            spouse = self.spouse[s]
-            if not spouse:
-                # Create it from Geneanet if it exists there
-                spouse = geneanet_to_gramps(level,None,self.spouseref[s])
-            f = self.family[s]
-
-            if not f:
-                print("WARNING: No family found whereas there should be one :-(")
-                return
-
-            # What children are in gramps
-            # Create a list of GPerson from them
-            crl = []
-            for c in f.family.get_child_ref_list():
-                gp = db.get_person_from_handle(c.ref)
-                gid = gp.get_gramps_id()
-                p = GPerson(level)
-                p.from_gramps(gid)
-                crl.append(p)
-
-            # What children are in geneanet
-            # Create a list of GPerson from them
-            # Compare and merge
-            for c in self.childref[s]:
-                # TODO: Assume there is no such child already existing
-                gpc = GPerson(level)
-                gpc.from_geneanet(c)
-
-                # Compare this person to the one in Gramps and if one matches, update it
-                # If not add it
-                found = None
-                # TODO: now something else
-                #for p in crl:
-                    #if gpc.is_similar(p):
-                        #found = p
-                if not found:
-                    found = GPerson(level)
-                found.to_gramps()
-                f.add_child(found)
-
-                if args.verbosity >= 2:
-                    print("=> Recursing on the child of "+self.firstname+" "+self.lastname+' : '+gpc.firstname+' '+gpc.lastname)
-                # Recurse with first spouse only for now
-                gpc.recurse_children(level,0)
-                if args.verbosity >= 2:
-                    print("=> End of recursing on the child of "+self.firstname+" "+self.lastname+' : '+gpc.firstname+' '+gpc.lastname)
-
-        if level > args.level:
-            if args.verbosity >= 1:
-                print("Stopping exploration as we reached level "+str(level))
 
 def import_data(database, filename, user):
 
@@ -1452,14 +1446,13 @@ def main():
     if args.ascendants:
        gp.recurse_parents(LEVEL)
     
-    # TODO: We need to handle spouses first and create them if needed
+    fam = []
     if args.spouses:
-       gp.add_spouse(LEVEL)
-
-    LEVEL = 0
+       fam = gp.add_spouses(LEVEL)
     if args.descendants:
-        # TODO: First spouse just for now
-        gp.recurse_children(LEVEL,0)
+        for f in fam:
+            LEVEL = 0
+            f.recurse_children(LEVEL)
     
     db.close()
     sys.exit(0)
