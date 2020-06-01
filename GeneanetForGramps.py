@@ -137,38 +137,6 @@ def convert_date(datetab):
     bd2 = datetime.strptime(bd1, "%d %B %Y")
     return(bd2.strftime("%Y-%m-%d"))
         
-def get_child_list(db, person, spouse):
-    "return list of children for given person or None"
-    children = []
-    cret = []
-    for fam_handle in person.get_family_handle_list():
-        fam = db.get_family_from_handle(fam_handle)
-        for child_ref in fam.get_child_ref_list():
-            # Adds only if this is the correct spouse
-            children.append(child_ref.ref)
-    if children:
-        for c in children:
-            c1 = db.get_person_from_handle(c)
-            cret.append(c1)
-        return (cret)
-    return None
-
-def get_marriage_list(db, person):
-    "return list of marriages for given person or None"
-    marriages = []
-    for family_handle in person.get_family_handle_list():
-        family = db.get_family_from_handle(family_handle)
-        if int(family.get_relationship()) == FamilyRelType.MARRIED:
-            for event_ref in family.get_event_ref_list():
-                event = db.get_event_from_handle(event_ref.ref)
-                if (event.get_type() == EventType.MARRIAGE and
-                        (event_ref.get_role() == EventRoleType.FAMILY or
-                         event_ref.get_role() == EventRoleType.PRIMARY)):
-                    marriages.append(event_ref.ref)
-    if marriages:
-        return (marriages)
-    return None
-
 class Geneanet(Gramplet):
     '''
     Gramplet to import Geneanet persons into Gramps
