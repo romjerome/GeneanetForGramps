@@ -31,6 +31,7 @@ import time
 import io
 import sys
 import re
+import random
 
 #------------------------------------------------------------------------
 #
@@ -852,6 +853,9 @@ class GPerson(GBase):
                     print(_("Unable to perform HTML analysis"))
     
                 self.url = purl
+                # Wait after a Genanet request to be fair with the site 
+                # between 2 and 7 seconds
+                time.sleep(random.randint(2,7))
                 try:
                     # Should return F or H
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
