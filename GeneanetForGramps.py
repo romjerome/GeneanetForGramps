@@ -87,6 +87,8 @@ CONFIG.register("preferences.include_descendants", True)
 CONFIG.register("preferences.include_spouse", True)
 CONFIG.load()
 
+db = None
+gname = "/users/bruno/.gramps/grampsdb/5ec17554"
 verbosity = 0
 force = False
 ascendants = False
@@ -1016,13 +1018,15 @@ class GPerson(GBase):
                     if p.xpath('text()')[0] == '\n':
                         try:
                             pname = p.xpath('a/text()')[0]
-                            print('Parent name: %s'%(pname))
+                            if verbosity >= 1:
+                                print('Parent name: %s'%(pname))
                         except:
                             pname = ""
                             # if pname is ? ? then go to next one
                         try:
                             pref = p.xpath('a/attribute::href')[0]
-                            print('Parent ref:', ROOTURL+pref)
+                            if verbosity >= 1:
+                                print('Parent ref:', ROOTURL+pref)
                         except:
                             pref = ""
                         prefl.append(ROOTURL+str(pref))
@@ -1435,10 +1439,16 @@ def geneanet_to_gramps(p, level, gid, url):
 
 def main():
 
-    # Global vars
-    global args
+    # global allow local modification of these global variables
     global db
     global gname
+    global verbosity
+    global force
+    global ascendants
+    global descendants
+    global spouses
+    global LEVEL
+
 
     parser = argparse.ArgumentParser(description="Import Geneanet subtrees into Gramps")
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity")
@@ -1489,8 +1499,8 @@ def main():
     
     ids = db.get_person_gramps_ids()
     for i in ids:
-        if verbosity >= 1:
-            print(i)
+        if verbosity >= 3:
+            print("DEBUG: existing gramps id:"+i)
     
     if verbosity >= 1 and force:
         print("WARNING: Force mode activated")
