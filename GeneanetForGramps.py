@@ -103,6 +103,17 @@ from datetime import datetime
 
 # Generic functions
 
+def format_year(date):
+    """
+    Remove potential empty moth/day coming from Gramps (00)
+    """
+    if not date:
+        return(date)
+    if (date[4:] == "-00-00"):
+        return(date[0:4])
+    else:
+        return(date)
+
 def format_iso(date_tuple):
     """
     Format an iso date.
@@ -140,8 +151,12 @@ def convert_date(datetab):
         return(None)
     idx = 0
     if datetab[0] == 'en':
+        # avoid a potential month
+        if datetab[1].isalpha():
+            return(datetab[2][0:4])
         # avoid a potential , after the year
-        return(datetab[1][0:4])
+        elif datetab[1].isnumeric():
+            return(datetab[1][0:4])
     if datetab[0] == 'ca' or datetab[0] == 've' or datetab[0] == 'ap' or datetab[0] == 'av':
         return(datetab[0]+" "+datetab[1][0:4])
     if datetab[0] == 'le':
@@ -201,7 +216,7 @@ class GBase:
             scopy = True
 
         # Empty field
-        if self.__dict__[attr] and self.__dict__[attr] == "" and self.__dict__['g_'+attr] != "":
+        if self.__dict__[attr] and self.__dict__[attr] == "" and self.__dict__['g_'+attr] and self.__dict__['g_'+attr] != "":
             scopy = True
 
         # Force the copy
@@ -251,7 +266,9 @@ class GBase:
                 if not self.__dict__['g_'+attr]:
                     scopy = False
                 else:
-                    if self.__dict__[attr] < self.__dict__['g_'+attr]:
+                    if self.__dict__[attr] == "" and self.__dict__['g_'+attr] != "":
+                        scopy = True
+                    elif self.__dict__[attr] < self.__dict__['g_'+attr]:
                         scopy = True
 
         if scopy:
@@ -371,20 +388,39 @@ class GBase:
             # Get or create the event date
             date = event.get_date_object()
             if self.__dict__[attr+'date']:
+                idx = 0
                 if self.__dict__[attr+'date'][:1] == 'ca':
+                    idx = 1
                     mod = Date.MOD_ABOUT 
                 if self.__dict__[attr+'date'][:1] == 've':
+                    idx = 1
                     mod = Date.MOD_ABOUT 
                 elif self.__dict__[attr+'date'][:1] == 'av':
+                    idx = 1
                     mod = Date.MOD_BEFORE 
                 elif self.__dict__[attr+'date'][:1] == 'ap':
+                    idx = 1
                     mod = Date.MOD_AFTER 
+                elif self.__dict__[attr+'date'][:1] == 'en':
+                    idx = 1
+                    mod = Date.MOD_NONE
                 else:
-                    mod = Date.MOD_NONE 
+                    mod = Date.MOD_NONE
                 # ISO string, put in a tuple, reversed
-                tab = self.__dict__[attr+'date'].split('-')
-                date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
-            if args.verbosity >= 2 and self.__dict__[attr+'date']:
+                tab = self.__dict__[attr+'date'][idx:].split('-')
+                if len(tab) == 3:
+                    date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
+                elif len(tab) == 2:
+                    date.set_yr_mon_day(int(tab[0]),int(tab[1]),0)
+                elif len(tab) == 1:
+                    date.set_year(int(tab[0]))
+                elif len(tab) == 0:
+                    print("WARNING: Trying to affect an empty date")
+                    pass
+                else:
+                    print("WARNING: Trying to affect an extra numbered date")
+                    pass
+            if verbosity >= 2 and self.__dict__[attr+'date']:
                 print("Update "+attr+" Date to "+self.__dict__[attr+'date'])
             event.set_date_object(date)
             db.commit_event(event,tran)
@@ -413,7 +449,7 @@ class GBase:
         Give back the date of the event related to the GPerson or GFamily
         '''
     
-        if verbosity >= 3:
+        if verbosity >= 4:
             print("EventType: %d"%(evttype))
     
         if not self:
@@ -437,7 +473,7 @@ class GBase:
             return(None)
     
         if ref:
-            if verbosity >= 3:
+            if verbosity >= 4:
                 print("Ref:",ref)
             try:
                 event = db.get_event_from_handle(ref.ref)
@@ -445,15 +481,15 @@ class GBase:
                 print("Didn't find a known ref for this ref date: ",ref)
                 return(None)
             if event:
-                if verbosity >= 3:
+                if verbosity >= 4:
                     print("Event:",event)
                 date = event.get_date_object()
                 tab = date.get_dmy()
-                if verbosity >= 3:
+                if verbosity >= 4:
                     print("Found date:",tab)
                 if len(tab) == 3:
                     tab = date.get_ymd()
-                    if verbosity >= 3:
+                    if verbosity >= 4:
                         print("Found date2:",tab)
                     ret = format_iso(tab)
                 else:
@@ -529,9 +565,8 @@ class GFamily(GBase):
                 mother = db.get_person_from_handle(mh)
             if self.father and father and father.gramps_id == self.father.gid \
                 and self.mother and mother and mother.gramps_id == self.mother.gid:
-                if verbosity >= 2:
-                    print("Found a Gramps Family: "+i)
                 return(f)
+            #TODO: What about preexisting families not created in this run ?
         return(None)
 
     def from_geneanet(self):
@@ -591,12 +626,18 @@ class GFamily(GBase):
             # If we don't know which family this is, try to find it in Gramps 
             # This supposes that Geneanet data are already present in GFamily
             self.family = self.find_grampsf()
+            if self.family:
+                if verbosity >= 2:
+                    print("Found an existing Gramps family "+self.family.gramps_id)
+                self.gid = self.family.gramps_id
             # And if we haven't found it, create it in gramps
             if self.family == None:
                 self.create_grampsf()
 
         if self.family:
             self.marriagedate = self.get_gramps_date(EventType.MARRIAGE)
+            if self.marriagedate == "":
+                self.marriagedate = None
             for eventref in self.family.get_event_ref_list():
                 event = db.get_event_from_handle(eventref.ref)
                 if (event.get_type() == EventType.MARRIAGE
@@ -1069,17 +1110,62 @@ class GPerson(GBase):
             if verbosity >= 3:
                 print("DEBUG: Looking after "+i)
             p = db.get_person_from_gramps_id(i)
-            gp = GPerson(0)
-            gp.from_gramps(i)
-            if gp.firstname == self.g_firstname \
-            and gp.lastname == self.g_lastname \
-            and (gp.birthdate == self.g_birthdate \
-                or gp.deathdate == self.g_deathdate):
-                if args.verbosity >= 2:
-                    print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname)
+            try:
+                name = p.primary_name.get_name().split(', ')
+            except:
+                continue
+            if len(name) == 0:
+                continue
+            elif len(name) == 1:
+                name.append(None)
+            if name[0]:
+                lastname = name[0]
+            else:
+                lastname = ""
+            if name[1]:
+                firstname = name[1]
+            else:
+                firstname = ""
+            # Assumption it's the right one
+            self.grampsp = p
+            bd = self.get_gramps_date(EventType.BIRTH)
+            # Remove empty month/day if needed to compare below with just a year potentially
+            bd = format_year(bd)
+            dd = self.get_gramps_date(EventType.DEATH)
+            dd = format_year(dd)
+            if verbosity >= 3:
+                print("DEBUG: firstname: "+firstname+" vs g_firstname: "+self.g_firstname)
+                print("DEBUG: lastname: "+lastname+" vs g_lastname: "+self.g_lastname)
+                if not bd:
+                    pbd = "None"
+                else:
+                    pbd = bd
+                if not dd:
+                    pdd = "None"
+                else:
+                    pdd = dd
+                if not self.g_birthdate:
+                    g_pbd = "None"
+                else:
+                    g_pbd = self.g_birthdate
+                if not self.g_deathdate:
+                    g_pdd = "None"
+                else:
+                    g_pdd = self.g_deathdate
+                print("DEBUG: bd: "+pbd+" vs g_bd: "+g_pbd)
+                print("DEBUG: dd: "+pdd+" vs g_dd: "+g_pdd)
+            if firstname == self.g_firstname \
+            and lastname == self.g_lastname \
+            and (bd == self.g_birthdate \
+                or dd == self.g_deathdate):
                 self.gid = p.gramps_id
-                return(p)
-        return(None)
+                if verbosity >= 2:
+                    print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname+ "("+self.gid+")")
+                # Found it we can exit
+                break
+            else:
+                # it's not the right person finally
+                self.grampsp = None
 
     def to_gramps(self):
         '''
@@ -1164,7 +1250,7 @@ class GPerson(GBase):
         if not found:
             # If we don't know who this is, try to find it in Gramps 
             # This supposes that Geneanet data are already present in GPerson
-            self.grampsp = self.find_grampsp()
+            self.find_grampsp()
             # And if we haven't found it, create it in gramps
             if self.grampsp == None:
                 self.create_grampsp()
