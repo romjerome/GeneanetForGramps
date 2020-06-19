@@ -16,18 +16,19 @@
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------
 
-register(GRAMPLET,
-    id    = 'Import Geneanet for Gramps',
-    name  = _("Import Geneanet for Gramps"),
+register(TOOL,
+    id    = 'Import Geneanet data for Gramps',
+    name  = _("Import Geneanet data for Gramps"),
     name_accell  = _("Geneanet for Gramps"),
-    description =  _("Extensions to import from Geneanet into Gramps."),
+    description =  _("Extension to import data from Geneanet into Gramps."),
     version = '1.0.0',
     gramps_target_version = '5.1',
     status = STABLE, 
     fname = 'GeneanetForGramps.py',
-    height=200,
-    gramplet = 'GeneanetGramplet',
-    gramplet_title=_("Geneanet for Gramps"),
-    navtypes=["Person"]
+    authors = ['Bruno Cornec'],
+    authors_email = ['bruno@flossita.org'],
+    category = TOOL_UTILS,
+    toolclass = 'GeneanetForGramps',
+    optionclass = 'GeneanetForGrampsOptions',
+    tool_modes = [TOOL_MODE_GUI],
 )
-

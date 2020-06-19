@@ -18,12 +18,12 @@
 # $Id: $
 
 """
-Geneanet Gramplet
+Geneanet Import Tool
 Import into Gramps persons from Geneanet
 """
 #-------------------------------------------------------------------------
 #
-# Standard Python Modules
+# Used Python Modules
 #
 #-------------------------------------------------------------------------
 import os
@@ -32,6 +32,10 @@ import io
 import sys
 import re
 import random
+from lxml import html
+import requests
+import argparse
+from datetime import datetime
 
 #------------------------------------------------------------------------
 #
@@ -39,13 +43,7 @@ import random
 #
 #------------------------------------------------------------------------
 from gi.repository import Gtk
-
-from gramps.gen.plug import Gramplet
-from gramps.gui.editors import EditPerson
-from gramps.gui.dialog import ErrorDialog
-from gramps.gen.errors import WindowActiveError, DatabaseError
-from gramps.gen.display.name import displayer as name_displayer
-from gramps.gen.datehandler import get_date
+from gi.repository import GObject
 
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 try:
@@ -54,16 +52,23 @@ except ValueError:
     _trans = glocale.translation
 _ = _trans.gettext
 
+#------------------------------------------------------------------------
+#
+# Gramps modules
+#
+#------------------------------------------------------------------------
 import logging
 from gramps.gen.config import config
-from gramps.gen.display.place import displayer as _pd
 from gramps.gen.db import DbTxn
-from gramps.gen.db.utils import open_database
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
 from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType, Url, UrlType
-#from gramps.gen.utils.location import get_main_location
-#from gramps.version import VERSION
+
+# Gramps GUI
+from gramps.gen.const import URL_MANUAL_PAGE
+from gramps.gui.plug import tool
+from gramps.gui.managedwindow import ManagedWindow
+from gramps.gui.glade import Glade
 
 LOG = logging.getLogger("geneanetforgedcom")
 
@@ -79,13 +84,11 @@ LANGUAGES = {
     'sv' : 'Swedish', 'ru' : 'Russian',
     }
 
-GRAMPLET_CONFIG_NAME = "geneanetforgramps"
-CONFIG = config.register_manager("geneanetforgramps")
+CONFIG_NAME = "geneanetforgramps"
+CONFIG = config.register_manager(CONFIG_NAME)
 
-CONFIG.register("preferences.include_ascendants", True)
-CONFIG.register("preferences.include_descendants", True)
-CONFIG.register("preferences.include_spouse", True)
-CONFIG.load()
+WIKI_HELP_PAGE = '%s_-_Tools' % URL_MANUAL_PAGE
+WIKI_HELP_SEC = _('manual|GeneanetForGramps')
 
 db = None
 gname = "/users/bruno/.gramps/grampsdb/5ec17554"
@@ -96,10 +99,14 @@ descendants = False
 spouses = False
 LEVEL = 2
 
-from lxml import html
-import requests
-import argparse
-from datetime import datetime
+CONFIG.register("preferences.include_ascendants", ascendants)
+CONFIG.register("preferences.include_descendants", descendants)
+CONFIG.register("preferences.include_spouse", False)
+CONFIG.register("preferences.level", LEVEL)
+CONFIG.register("preferences.verbosity", verbosity)
+CONFIG.load()
+CONFIG.save()
+
 
 # Generic functions
 
@@ -167,32 +174,50 @@ def convert_date(datetab):
     bd2 = datetime.strptime(bd1, "%d %B %Y")
     return(bd2.strftime("%Y-%m-%d"))
         
-class Geneanet(Gramplet):
-    '''
-    Gramplet to import Geneanet persons into Gramps
-    '''
+class GeneanetForGramps(ManagedWindow):
 
-    def init(sefl):
-        self.gui.WIDGET = self.build_gui()
-        self.gui.get_container_widget().remove(self.gui.textview)
-        self.gui.get_container_widget().add(self.gui.WIDGET)
-        self.gui.WIDGET.show()
+    def __init__(self, dbstate, user, options_class, name, callback=None):
+        uistate = user.uistate
+        tool.ActivePersonTool.__init__(self, dbstate, uistate, options_class, name)
 
-    def build_gui(self):
-        """
-        Build the GUI interface.
-        """
-        tip = _('Double-click on a row to take the selected person as starting point.')
-        self.set_tooltip(tip)
-        self.view = Gtk.TreeView()
-        titles = [(_('Name'), 0, 230),
-                  (_('Birth'), 2, 100),
-                  ('', NOSORT, 1),
-                  ('', NOSORT, 1), # tooltip
-                  ('', NOSORT, 100)] # handle
-        self.model = ListModel(self.view, titles, list_mode="tree",
-                               event_func=self.cb_double_click)
-        return self.view
+        # Fail if we have no active person
+        if self.fail:
+            return
+
+        person_handle = uistate.get_active('Person')
+        person = dbstate.db.get_person_from_handle(person_handle)
+        self.gid = person.gramps_id
+        self.name = person.get_primary_name().get_regular_name()
+        self.title = _('Geneanet import of "%s (%s)"') % (self.name, self.gid)
+        ManagedWindow.__init__(self, uistate, [], self.__class__)
+        self.dbstate = dbstate
+        self.uistate = uistate
+        self.db = dbstate.db
+
+        topDialog = Glade()
+
+        topDialog.connect_signals({
+            "destroy_passed_object" : self.close,
+            "on_help_clicked"       : self.on_help_clicked,
+            "on_delete_event"       : self.close,
+        })
+
+        window = topDialog.toplevel
+        title = topDialog.get_object("title")
+        self.set_window(window, title, self.title)
+        self.setup_configs('interface.geneanetforgramps', 450, 400)
+
+    def on_help_clicked(self, obj):
+        """Display the relevant portion of Gramps manual"""
+        display_help(WIKI_HELP_PAGE, WIKI_HELP_SEC)
+
+class GeneanetForGrampsOptions(tool.ToolOptions):
+    """
+    Defines options and provides handling interface.
+    """
+    def __init__(self, name, person_id=None):
+        """ Initialize the options class """
+        tool.ToolOptions.__init__(self, name, person_id)
 
 class GBase:
 
@@ -1483,25 +1508,6 @@ class GPerson(GBase):
                     print("Stopping exploration as there are no more parents")
         return
 
-
-def import_data(database, filename, user):
-
-    global callback
-
-    try:
-        g = GeneanetParser(database)
-    except IOError as msg:
-        user.notify_error(_("%s could not be opened\n") % filename,str(msg))
-        return
-
-    try:
-        #status = g.find_geneanet_person(purl)
-        pass
-    except IOError as msg:
-        errmsg = _("%s could not be opened\n") % filename
-        user.notify_error(errmsg,str(msg))
-        return
-    return ImportInfo({_("Results"): _("done")})
 
 def geneanet_to_gramps(p, level, gid, url):
     '''
