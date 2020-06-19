@@ -105,7 +105,7 @@ from datetime import datetime
 
 def format_year(date):
     """
-    Remove potential empty moth/day coming from Gramps (00)
+    Remove potential empty month/day coming from Gramps (00)
     """
     if not date:
         return(date)
@@ -307,7 +307,7 @@ class GBase:
             for handle in db.get_place_handles():
                 pl = db.get_place_from_handle(handle)
                 explace = pl.get_name().value
-                if verbosity >= 3:
+                if verbosity >= 4:
                     print("DEBUG: search for "+str(placename)+" in "+str(explace))
                 if str(explace) == str(placename):
                     keep = pl
@@ -554,6 +554,8 @@ class GFamily(GBase):
         ids = db.get_family_gramps_ids()
         for i in ids:
             f = db.get_family_from_gramps_id(i)
+            if verbosity >= 3:
+                print("Analysing Gramps Family "+f.gramps_id)
             # Do these people already form a family
             father = None
             fh = f.get_father_handle()
@@ -563,6 +565,27 @@ class GFamily(GBase):
             mh = f.get_mother_handle()
             if mh:
                 mother = db.get_person_from_handle(mh)
+            if verbosity >= 3:
+                if not father:
+                    fgid = None
+                else:
+                    fgid = father.gramps_id
+                if not fgid:
+                    fgid = "None"
+                sfgid = self.father.gid
+                if not sfgid:
+                    sfgid = "None"
+                print("Check father ids: "+fgid+" vs "+sfgid)
+                if not mother:
+                    mgid = None
+                else:
+                    mgid = mother.gramps_id
+                if not mgid:
+                    mgid = "None"
+                smgid = self.mother.gid
+                if not smgid:
+                    smgid = "None"
+                print("Check mother ids: "+mgid+" vs "+smgid)
             if self.father and father and father.gramps_id == self.father.gid \
                 and self.mother and mother and mother.gramps_id == self.mother.gid:
                 return(f)
@@ -1160,7 +1183,7 @@ class GPerson(GBase):
                 or dd == self.g_deathdate):
                 self.gid = p.gramps_id
                 if verbosity >= 2:
-                    print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname+ "("+self.gid+")")
+                    print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname+ " ("+self.gid+")")
                 # Found it we can exit
                 break
             else:
