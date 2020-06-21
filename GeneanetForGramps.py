@@ -69,6 +69,7 @@ from gramps.gen.const import URL_MANUAL_PAGE
 from gramps.gui.plug import tool
 from gramps.gui.managedwindow import ManagedWindow
 from gramps.gui.glade import Glade
+from gramps.gui.display import display_help
 
 LOG = logging.getLogger("geneanetforgedcom")
 
@@ -109,6 +110,15 @@ CONFIG.save()
 
 
 # Generic functions
+
+def format_ca(date):
+    """
+    Change the 'ca' chain into the 'vers' chain for now in Geneanet analysis
+    """
+    # If ca for an about date, replace with vers (for now)
+    if date[0:2] == "ca":
+        date = "vers"+date[2:]
+    return(date)
 
 def format_year(date):
     """
@@ -164,7 +174,7 @@ def convert_date(datetab):
         # avoid a potential , after the year
         elif datetab[1].isnumeric():
             return(datetab[1][0:4])
-    if datetab[0] == 'ca' or datetab[0] == 've' or datetab[0] == 'ap' or datetab[0] == 'av':
+    if (datetab[0][0:2] == 've' or datetab[0][0:2] == 'ap' or datetab[0][0:2] == 'av') and (len(datetab) == 2):
         return(datetab[0]+" "+datetab[1][0:4])
     if datetab[0] == 'le':
         idx = 1
@@ -530,7 +540,7 @@ class GBase:
 
 class GFamily(GBase):
     '''
-    Family as seen by Gramps
+    Family as seen by Gramps and Geneanet
     '''
     def __init__(self,father,mother):
         # The 2 GPersons parents in this family should exist
@@ -985,7 +995,7 @@ class GPerson(GBase):
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
                     if verbosity >= 2:
                         print('Birth:', ld)
-                    self.g_birthdate = ld
+                    self.g_birthdate = format_ca(ld)
                 except:
                     self.g_birthdate = None
                 try:
@@ -1008,7 +1018,7 @@ class GPerson(GBase):
                     ld = convert_date(death[0].split('-')[0].split()[1:])
                     if verbosity >= 2:
                         print('Death:', ld)
-                    self.g_deathdate = ld
+                    self.g_deathdate = format_ca(ld)
                 except:
                     self.g_deathdate = None
                 try:
@@ -1056,7 +1066,7 @@ class GPerson(GBase):
                         ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if verbosity >= 2:
                             print('Married:', ld)
-                        self.marriagedate.append(ld)
+                        self.marriagedate.append(format_ca(ld))
                     except:
                         self.marriagedate.append(None)
                     try:
