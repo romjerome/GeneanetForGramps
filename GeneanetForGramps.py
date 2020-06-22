@@ -126,8 +126,8 @@ def format_year(date):
     """
     if not date:
         return(date)
-    if (date[4:] == "-00-00"):
-        return(date[0:4])
+    if (date[-6:] == "-00-00"):
+        return(date[0:-6])
     else:
         return(date)
 
@@ -424,25 +424,27 @@ class GBase:
             date = event.get_date_object()
             if self.__dict__[attr+'date']:
                 idx = 0
-                if self.__dict__[attr+'date'][:1] == 'ca':
+                mod = Date.MOD_NONE
+                if self.__dict__[attr+'date'][0:2] == 've':
                     idx = 1
                     mod = Date.MOD_ABOUT 
-                if self.__dict__[attr+'date'][:1] == 've':
-                    idx = 1
-                    mod = Date.MOD_ABOUT 
-                elif self.__dict__[attr+'date'][:1] == 'av':
+                elif self.__dict__[attr+'date'][0:2] == 'av':
                     idx = 1
                     mod = Date.MOD_BEFORE 
-                elif self.__dict__[attr+'date'][:1] == 'ap':
+                elif self.__dict__[attr+'date'][0:2] == 'ap':
                     idx = 1
                     mod = Date.MOD_AFTER 
-                elif self.__dict__[attr+'date'][:1] == 'en':
+                elif self.__dict__[attr+'date'][0:2] == 'en':
                     idx = 1
-                    mod = Date.MOD_NONE
                 else:
-                    mod = Date.MOD_NONE
+                    pass
+                if idx == 1:
+                    # we need to removed the first word
+                    string = self.__dict__[attr+'date'].split(' ',1)[1]
+                else:
+                    string = self.__dict__[attr+'date']
                 # ISO string, put in a tuple, reversed
-                tab = self.__dict__[attr+'date'][idx:].split('-')
+                tab = string.split('-')
                 if len(tab) == 3:
                     date.set_yr_mon_day(int(tab[0]),int(tab[1]),int(tab[2]))
                 elif len(tab) == 2:
@@ -455,6 +457,8 @@ class GBase:
                 else:
                     print("WARNING: Trying to affect an extra numbered date")
                     pass
+                if mod:
+                    date.set_modifier(mod)
             if verbosity >= 2 and self.__dict__[attr+'date']:
                 print("Update "+attr+" Date to "+self.__dict__[attr+'date'])
             event.set_date_object(date)
@@ -482,13 +486,14 @@ class GBase:
     def get_gramps_date(self,evttype):
         '''
         Give back the date of the event related to the GPerson or GFamily
+        as a string ISO formated
         '''
     
         if verbosity >= 4:
             print("EventType: %d"%(evttype))
     
         if not self:
-            return
+            return(None)
     
         if evttype == EventType.BIRTH:
             ref = self.grampsp.get_birth_ref()
@@ -519,19 +524,28 @@ class GBase:
                 if verbosity >= 4:
                     print("Event:",event)
                 date = event.get_date_object()
+                moddate = date.get_modifier()
                 tab = date.get_dmy()
                 if verbosity >= 4:
-                    print("Found date:",tab)
+                    print("Found date: ",tab)
                 if len(tab) == 3:
                     tab = date.get_ymd()
                     if verbosity >= 4:
-                        print("Found date2:",tab)
+                        print("Found date2: ",tab)
                     ret = format_iso(tab)
                 else:
                     ret = format_noniso(tab)
+                if moddate == Date.MOD_BEFORE:
+                    pref = "avant "
+                elif moddate == Date.MOD_AFTER:
+                    pref = "après "
+                elif moddate == Date.MOD_ABOUT:
+                    pref = "vers "
+                else:
+                    pref = ""
                 if verbosity >= 3:
-                    print("Returned date:",ret)
-                return(ret)
+                    print("Returned date: "+pref+ret)
+                return(pref+ret)
             else:
                 return(None)
         else:
@@ -1212,17 +1226,23 @@ class GPerson(GBase):
                     g_pdd = self.g_deathdate
                 print("DEBUG: bd: "+pbd+" vs g_bd: "+g_pbd)
                 print("DEBUG: dd: "+pdd+" vs g_dd: "+g_pdd)
-            if firstname == self.g_firstname \
-            and lastname == self.g_lastname \
-            and (bd == self.g_birthdate \
-                or dd == self.g_deathdate):
+            if firstname != self.g_firstname or lastname != self.g_lastname:
+                # it's not the right person finally
+                self.grampsp = None
+                continue
+            if not bd and not dd and not self.g_birthdate and not self.g_deathdate:
+                # we skip a person for which we have no date at all
+                # this may create duplicates, but is the best apparoach
+                self.grampsp = None
+                continue
+            if bd == self.g_birthdate or dd == self.g_deathdate:
                 self.gid = p.gramps_id
                 if verbosity >= 2:
                     print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname+ " ("+self.gid+")")
                 # Found it we can exit
                 break
             else:
-                # it's not the right person finally
+                # still not found
                 self.grampsp = None
 
     def to_gramps(self):
