@@ -16,10 +16,11 @@
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------
 
+#print('Before registering Geneanet Plugin')
 register(TOOL,
     id    = 'Import Geneanet data for Gramps',
     name  = _("Import Geneanet data for Gramps"),
-    name_accell  = _("Geneanet for Gramps"),
+    #name_accell  = _("Geneanet for Gramps"),
     description =  _("Extension to import data from Geneanet into Gramps."),
     version = '1.0.0',
     gramps_target_version = '5.1',
@@ -27,8 +28,17 @@ register(TOOL,
     fname = 'GeneanetForGramps.py',
     authors = ['Bruno Cornec'],
     authors_email = ['bruno@flossita.org'],
-    category = TOOL_UTILS,
+    category = TOOL_DBPROC,
     toolclass = 'GeneanetForGramps',
     optionclass = 'GeneanetForGrampsOptions',
     tool_modes = [TOOL_MODE_GUI],
+    #height = 100,
+    #expand=True,
+    #gramplet = 'GeneanetForGramps',
+    #gramplet_title=_("Import Geneanet data for Gramps"),
+    #detached_width = 500,
+    #detached_height = 400,
+    #help_url = "5.1_Addons#Addon_List",
+    #navtypes=["Person"],
 )
+#print('After registering Geneanet Plugin')

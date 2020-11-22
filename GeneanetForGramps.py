@@ -66,12 +66,14 @@ from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Da
 
 # Gramps GUI
 from gramps.gen.const import URL_MANUAL_PAGE
-from gramps.gui.plug import tool
+from gramps.gen.display.name import displayer as name_displayer
 from gramps.gui.managedwindow import ManagedWindow
-from gramps.gui.glade import Glade
 from gramps.gui.display import display_help
+from gramps.gui.plug import MenuToolOptions, PluginWindows
+from gramps.gen.plug.menu import StringOption, PersonOption, BooleanOption, NumberOption, FilterOption, MediaOption
+from gramps.gui.utils import ProgressMeter
 
-LOG = logging.getLogger("geneanetforgedcom")
+LOG = logging.getLogger("GeneanetForGramps")
 
 TIMEOUT = 5
 
@@ -85,9 +87,6 @@ LANGUAGES = {
     'sv' : 'Swedish', 'ru' : 'Russian',
     }
 
-CONFIG_NAME = "geneanetforgramps"
-CONFIG = config.register_manager(CONFIG_NAME)
-
 WIKI_HELP_PAGE = '%s_-_Tools' % URL_MANUAL_PAGE
 WIKI_HELP_SEC = _('manual|GeneanetForGramps')
 
@@ -99,15 +98,30 @@ ascendants = False
 descendants = False
 spouses = False
 LEVEL = 2
+ROOTURL = 'https://gw.geneanet.org/'
+GUIMODE = False
+progress = None
 
-CONFIG.register("preferences.include_ascendants", ascendants)
-CONFIG.register("preferences.include_descendants", descendants)
-CONFIG.register("preferences.include_spouse", False)
-CONFIG.register("preferences.level", LEVEL)
-CONFIG.register("preferences.verbosity", verbosity)
+CONFIG_NAME = "geneanetforgramps"
+CONFIG = config.register_manager(CONFIG_NAME)
+CONFIG.register("pref.ascendants", ascendants)
+CONFIG.register("pref.descendants", descendants)
+CONFIG.register("pref.spouses", spouses)
+CONFIG.register("pref.level", LEVEL)
+CONFIG.register("pref.force", force)
+CONFIG.register("pref.verbosity", verbosity)
 CONFIG.load()
-CONFIG.save()
 
+def save_config():
+    CONFIG.set("pref.ascendants", ascendants)
+    CONFIG.set("pref.descendants", descendants)
+    CONFIG.set("pref.spouses", spouses)
+    CONFIG.set("pref.level", LEVEL)
+    CONFIG.set("pref.force", force)
+    CONFIG.set("pref.verbosity", verbosity)
+    CONFIG.save()
+
+save_config()
 
 # Generic functions
 
@@ -162,7 +176,7 @@ def convert_date(datetab):
     '''
 
     if verbosity >= 3:
-        print("datetab received:",datetab)
+        print(_("datetab received:"),datetab)
 
     if len(datetab) == 0:
         return(None)
@@ -184,50 +198,181 @@ def convert_date(datetab):
     bd2 = datetime.strptime(bd1, "%d %B %Y")
     return(bd2.strftime("%Y-%m-%d"))
         
-class GeneanetForGramps(ManagedWindow):
-
-    def __init__(self, dbstate, user, options_class, name, callback=None):
-        uistate = user.uistate
-        tool.ActivePersonTool.__init__(self, dbstate, uistate, options_class, name)
-
-        # Fail if we have no active person
-        if self.fail:
-            return
-
-        person_handle = uistate.get_active('Person')
-        person = dbstate.db.get_person_from_handle(person_handle)
-        self.gid = person.gramps_id
-        self.name = person.get_primary_name().get_regular_name()
-        self.title = _('Geneanet import of "%s (%s)"') % (self.name, self.gid)
-        ManagedWindow.__init__(self, uistate, [], self.__class__)
-        self.dbstate = dbstate
-        self.uistate = uistate
-        self.db = dbstate.db
-
-        topDialog = Glade()
-
-        topDialog.connect_signals({
-            "destroy_passed_object" : self.close,
-            "on_help_clicked"       : self.on_help_clicked,
-            "on_delete_event"       : self.close,
-        })
-
-        window = topDialog.toplevel
-        title = topDialog.get_object("title")
-        self.set_window(window, title, self.title)
-        self.setup_configs('interface.geneanetforgramps', 450, 400)
-
-    def on_help_clicked(self, obj):
-        """Display the relevant portion of Gramps manual"""
-        display_help(WIKI_HELP_PAGE, WIKI_HELP_SEC)
-
-class GeneanetForGrampsOptions(tool.ToolOptions):
+# GUI Part
+class GeneanetForGrampsOptions(MenuToolOptions):
     """
     Defines options and provides handling interface.
     """
-    def __init__(self, name, person_id=None):
+    def __init__(self, name, person_id=None, dbstate=None):
         """ Initialize the options class """
-        tool.ToolOptions.__init__(self, name, person_id)
+        if verbosity >= 3:
+            print(_("Init Plugin Options"))
+        MenuToolOptions.__init__(self, name, person_id, dbstate)
+
+    def add_menu_options(self, menu):
+        """
+        Add all menu options to the tool window.
+        """
+        if verbosity >= 3:
+            print(_("Add Plugin Menu Options"))
+        #category_name = _("Options")
+        category_name = _("Geneanet Import Options")
+
+        self.__pid = PersonOption(_("Center Person"))
+        self.__pid.set_help(_("The center person for the filter"))
+        menu.add_option(category_name, "pid", self.__pid)
+
+        if verbosity >= 3:
+            print(_("Before URL"))
+        self.__gui_url = StringOption(_("Geneanet URL for the selected person"), ROOTURL)
+        self.__gui_url.set_help(_("URL on Geneanet of the person you have selected which will be used as an import base such as https://gw.geneanet.org/agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne"))
+        menu.add_option(category_name, "gui_url", self.__gui_url)
+
+        if verbosity >= 3:
+            print(_("Before ASC"))
+        gui_asc = CONFIG.get('pref.ascendants')
+        if verbosity >= 3:
+            if gui_asc:
+                print(_("ASC True"))
+            else:
+                print(_("ASC False"))
+        self.__gui_asc = BooleanOption(_("Import ascendants"), gui_asc)
+        self.__gui_asc.set_help(_("Import ascendants of the selected person up to level number"))
+        menu.add_option(category_name, "gui_asc", self.__gui_asc)
+
+        if verbosity >= 3:
+            print(_("Before DSC"))
+        gui_dsc = CONFIG.get('pref.descendants')
+        if verbosity >= 3:
+            if gui_dsc:
+                print(_("DSC True"))
+            else:
+                print(_("DSC False"))
+        self.__gui_dsc = BooleanOption(_("Import descendants"), gui_dsc)
+        self.__gui_dsc.set_help(_("Import descendants of the selected person up to level number"))
+        menu.add_option(category_name, "gui_dsc", self.__gui_dsc)
+
+        if verbosity >= 3:
+            print(_("Before SPO"))
+        gui_spo = CONFIG.get('pref.spouses')
+        if verbosity >= 3:
+            if gui_spo:
+                print(_("SPO True"))
+            else:
+                print(_("SPO False"))
+        self.__gui_spo = BooleanOption(_("Import spouses"), gui_spo)
+        self.__gui_spo.set_help(_("Import all spouses of the selected person"))
+        menu.add_option(category_name, "gui_spo", self.__gui_spo)
+
+        if verbosity >= 3:
+            print(_("Before LVL"))
+        gui_lvl = CONFIG.get('pref.level')
+        if verbosity >= 3:
+            print(_("LVL:"), gui_lvl)
+        self.__gui_level = NumberOption(_("Level of Import"), gui_lvl, 1, 100)
+        self.__gui_level.set_help(_("Maximum of upper or lower search done in the family tree - keep it small"))
+        menu.add_option(category_name, "gui_level", self.__gui_level)
+
+        if verbosity >= 3:
+            print(_("Before FORCE"))
+        gui_force = CONFIG.get('pref.force')
+        if verbosity >= 3:
+            if gui_force:
+                print(_("FORCE True"))
+            else:
+                print(_("FORCE False"))
+        self.__gui_force = BooleanOption(_("Force Import"), gui_force)
+        self.__gui_force.set_help(_("Force import of existing persons"))
+        menu.add_option(category_name, "gui_force", self.__gui_force)
+
+        if verbosity >= 3:
+            print(_("Before VRB"))
+        gui_verb = CONFIG.get('pref.verbosity')
+        if verbosity >= 3:
+            print(_("VRB:"), gui_verb)
+        self.__gui_verb = NumberOption(_("Verbosity"), gui_verb, 0, 3)
+        self.__gui_verb.set_help(_("Verbosity level from 0 (minimal) to 3 (very verbose)"))
+        menu.add_option(category_name, "gui_verb", self.__gui_verb)
+
+        if verbosity >= 3:
+            print(_("Menu Added"))
+
+class GeneanetForGramps(PluginWindows.ToolManagedWindowBatch):
+    """
+    Plugin that gives simplified interface to the import from Geneanet
+    """
+    def __init__(self, dbstate, user, options_class, name, callback):
+        if verbosity >= 3:
+            print(_("Init Plugin itself"))
+        PluginWindows.ToolManagedWindowBatch.__init__(self, dbstate, user, options_class, name, callback)
+
+    def get_title(self):
+        if verbosity >= 3:
+            print(_("Plugin get_title"))
+        return _("Geneanet Import Tool")  # tool window title
+
+    def initial_frame(self):
+        if verbosity >= 3:
+            print(_("Plugin initial_frame"))
+        return _("Geneanet Import Options")  # tab title
+
+    def run(self):
+        """
+        Main function running the Geneanet Import Tool
+        """
+        global db
+        global GUIMODE
+        global progress
+
+        if verbosity >= 3:
+            print(_("Plugin run"))
+        db = self.dbstate.db
+        self.__get_menu_options()
+        hdr = _('Importing from %s for user %s') % (self.purl,self.gid)
+        msg = _('Geneanet Import into Gramps')
+        progress = ProgressMeter(msg, hdr)
+        #progress = ProgressMeter(msg, hdr, False, None, True, None)
+        progress.set_pass(hdr,100,mode=ProgressMeter.MODE_ACTIVITY)
+        if verbosity >= 2:
+            print(msg)
+        GUIMODE = True
+        g2gaction(self.gid,self.purl)
+
+    def __get_menu_options(self):
+        """
+        General menu option processing.
+        """
+        global force
+        global ascendants
+        global descendants
+        global spouses
+        global LEVEL
+        global verbosity
+        if verbosity >= 3:
+            print(_("Plugin __get_menu_options"))
+
+        menu = self.options.menu
+
+        self.gid = self.options.menu.get_option_by_name('pid').get_value()
+        if verbosity >= 3:
+            print(_("GID:"),self.gid)
+        self.purl = self.options.menu.get_option_by_name('gui_url').get_value()
+        if verbosity >= 3:
+            print(_("URL:"),self.purl)
+        force = self.options.menu.get_option_by_name('gui_force').get_value()
+        ascendants = self.options.menu.get_option_by_name('gui_asc').get_value()
+        if verbosity >= 3:
+            if ascendants:
+                print(_("ASC True"))
+            else:
+                print(_("ASC False"))
+        descendants = self.options.menu.get_option_by_name('gui_dsc').get_value()
+        spouses = self.options.menu.get_option_by_name('gui_spo').get_value()
+        LEVEL = self.options.menu.get_option_by_name('gui_level').get_value()
+        verbosity = self.options.menu.get_option_by_name('gui_verb').get_value()
+        if verbosity >= 3:
+            print(_("LVL:"),LEVEL)
+        save_config()
 
 class GBase:
 
@@ -240,7 +385,7 @@ class GBase:
         Works for GPerson and GFamily
         '''
         if verbosity >= 3:
-            print("Smart Copying Attributes",attr)
+            print(_("Smart Copying Attributes"),attr)
 
         # By default do not copy as Gramps is the master reference
         scopy = False
@@ -265,18 +410,18 @@ class GBase:
             if (self.__dict__[attr] == 'F' and self.__dict__['g_'+attr] == 'H') \
             or (self.__dict__[attr] == 'H' and self.__dict__['g_'+attr] == 'F'):
                 if verbosity >= 1:
-                    print("WARNING: Gender conflict between Geneanet ("+self.__dict__['g_'+attr]+") and Gramps ("+self.__dict__[attr]+"), keeping Gramps value")
+                    print(_("WARNING: Gender conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps (")+self.__dict__[attr]+_("), keeping Gramps value"))
                 scopy = False
 
         if attr == 'lastname' and self.__dict__[attr] != self.__dict__['g_'+attr]:
             if verbosity >= 1 and self.__dict__[attr] != "":
-                print("WARNING: Lastname conflict between Geneanet ("+self.__dict__['g_'+attr]+") and Gramps ("+self.__dict__[attr]+"), keeping Gramps value")
+                print(_("WARNING: Lastname conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps ()"+self.__dict__[attr]+_("), keeping Gramps value"))
         if attr == 'lastname' and self.__dict__[attr] == "":
             scopy = True
 
         if attr == 'firstname' and self.__dict__[attr] != self.__dict__['g_'+attr]:
             if verbosity >= 1 and self.__dict__[attr] != "":
-                print("WARNING: Firstname conflict between Geneanet ("+self.__dict__['g_'+attr]+") and Gramps ("+self.__dict__[attr]+"), keeping Gramps value")
+                print(_("WARNING: Firstname conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps (")+self.__dict__[attr]+_("), keeping Gramps value"))
         if attr == 'firstname' and self.__dict__[attr] == "":
             scopy = True
 
@@ -308,12 +453,12 @@ class GBase:
 
         if scopy:
             if verbosity >= 2:
-                print("Copying Person attribute %s (former value %s newer value %s)"%(attr, self.__dict__[attr],self.__dict__['g_'+attr]))
+                print(_("Copying Person attribute %s (former value %s newer value %s)")%(attr, self.__dict__[attr],self.__dict__['g_'+attr]))
 
             self.__dict__[attr] = self.__dict__['g_'+attr]
         else:
             if verbosity >= 3:
-                print("Not Copying Person attribute (%s, value %s) onto %s"%(attr, self.__dict__[attr],self.__dict__['g_'+attr]))
+                print(_("Not Copying Person attribute (%s, value %s) onto %s")%(attr, self.__dict__[attr],self.__dict__['g_'+attr]))
 
 
     def get_or_create_place(self,event,placename):
@@ -330,7 +475,7 @@ class GBase:
             try:
                 place = db.get_place_from_handle(pl)
                 if verbosity >= 2:
-                    print("Reuse Place from Event:", place.get_name().value)
+                    print(_("Reuse Place from Event:"), place.get_name().value)
             except:
                 place = Place()
         else:
@@ -343,17 +488,17 @@ class GBase:
                 pl = db.get_place_from_handle(handle)
                 explace = pl.get_name().value
                 if verbosity >= 4:
-                    print("DEBUG: search for "+str(placename)+" in "+str(explace))
+                    print(_("DEBUG: search for ")+str(placename)+_(" in ")+str(explace))
                 if str(explace) == str(placename):
                     keep = pl
                     break
             if keep == None:
                 if verbosity >= 2:
-                    print("Create Place:", placename)
+                    print(_("Create Place:"), placename)
                 place = Place()
             else:
                 if verbosity >= 2:
-                    print("Reuse existing Place:", placename)
+                    print(_("Reuse existing Place:"), placename)
                 place = keep
         return(place)
     
@@ -374,7 +519,7 @@ class GBase:
             if reffunc:
                 event = db.get_event_from_handle(reffunc.ref)
                 if verbosity >= 2:
-                    print("Existing "+attr+" Event")
+                    print(_("Existing ")+attr+_(" Event"))
         elif gobj.__class__.__name__ == 'Family':
             role = EventRoleType.FAMILY
             if attr == 'marriage':
@@ -388,9 +533,9 @@ class GBase:
                 if marev:
                     event = marev
                     if verbosity >= 2:
-                        print("Existing "+attr+" Event")
+                        print(_("Existing ")+attr+_(" Event"))
         else:
-            print("ERROR: Unable to handle class %s in get_or_create_all_event"%(gobj.__class__.__name__))
+            print(_("ERROR: Unable to handle class %s in get_or_create_all_event")%(gobj.__class__.__name__))
                     
         if event is None:
             event = Event()
@@ -415,7 +560,7 @@ class GBase:
                 db.commit_event(event,tran)
                 db.commit_family(gobj,tran)
             if verbosity >= 2:
-                print("Creating "+attr+" ("+str(uptype)+") Event")
+                print(_("Creating ")+attr+" ("+str(uptype)+") "+_("Event"))
     
         if self.__dict__[attr+'date'] \
             or self.__dict__[attr+'place'] \
@@ -452,15 +597,15 @@ class GBase:
                 elif len(tab) == 1:
                     date.set_year(int(tab[0]))
                 elif len(tab) == 0:
-                    print("WARNING: Trying to affect an empty date")
+                    print(_("WARNING: Trying to affect an empty date"))
                     pass
                 else:
-                    print("WARNING: Trying to affect an extra numbered date")
+                    print(_("WARNING: Trying to affect an extra numbered date"))
                     pass
                 if mod:
                     date.set_modifier(mod)
             if verbosity >= 2 and self.__dict__[attr+'date']:
-                print("Update "+attr+" Date to "+self.__dict__[attr+'date'])
+                print(_("Update ")+attr+_(" Date to ")+self.__dict__[attr+'date'])
             event.set_date_object(date)
             db.commit_event(event,tran)
     
@@ -490,7 +635,7 @@ class GBase:
         '''
     
         if verbosity >= 4:
-            print("EventType: %d"%(evttype))
+            print(_("EventType: %d")%(evttype))
     
         if not self:
             return(None)
@@ -509,29 +654,29 @@ class GBase:
                         break
             ref = eventref
         else:
-            print("Didn't find a known EventType: ",evttype)
+            print(_("Didn't find a known EventType: "),evttype)
             return(None)
     
         if ref:
             if verbosity >= 4:
-                print("Ref:",ref)
+                print(_("Ref:"),ref)
             try:
                 event = db.get_event_from_handle(ref.ref)
             except:
-                print("Didn't find a known ref for this ref date: ",ref)
+                print(_("Didn't find a known ref for this ref date: "),ref)
                 return(None)
             if event:
                 if verbosity >= 4:
-                    print("Event:",event)
+                    print(_("Event:"),event)
                 date = event.get_date_object()
                 moddate = date.get_modifier()
                 tab = date.get_dmy()
                 if verbosity >= 4:
-                    print("Found date: ",tab)
+                    print(_("Found date: "),tab)
                 if len(tab) == 3:
                     tab = date.get_ymd()
                     if verbosity >= 4:
-                        print("Found date2: ",tab)
+                        print(_("Found date2: "),tab)
                     ret = format_iso(tab)
                 else:
                     ret = format_noniso(tab)
@@ -544,7 +689,7 @@ class GBase:
                 else:
                     pref = ""
                 if verbosity >= 3:
-                    print("Returned date: "+pref+ret)
+                    print(_("Returned date: ")+pref+ret)
                 return(pref+ret)
             else:
                 return(None)
@@ -573,7 +718,7 @@ class GFamily(GBase):
         self.g_childref = []
 
         if verbosity >= 1:
-            print("Creating GFamily: "+father.lastname+" - "+mother.lastname)
+            print(_("Creating GFamily: ")+father.firstname+" "+father.lastname+" - "+mother.firstname+" "+mother.lastname)
         self.url = father.url
         if self.url == "":
             self.url = mother.url
@@ -591,20 +736,20 @@ class GFamily(GBase):
             self.gid = grampsf.gramps_id
             self.family = grampsf
             if verbosity >= 2:
-                print("Create new Gramps Family: "+self.gid)
+                print(_("Create new Gramps Family: ")+self.gid)
 
     def find_grampsf(self):
         '''
         Find a Family in Gramps and return it
         '''
         if verbosity >= 2:
-            print("Look for a Gramps Family")
+            print(_("Look for a Gramps Family"))
         f = None
         ids = db.get_family_gramps_ids()
         for i in ids:
             f = db.get_family_from_gramps_id(i)
             if verbosity >= 3:
-                print("Analysing Gramps Family "+f.gramps_id)
+                print(_("Analysing Gramps Family ")+f.gramps_id)
             # Do these people already form a family
             father = None
             fh = f.get_father_handle()
@@ -624,7 +769,7 @@ class GFamily(GBase):
                 sfgid = self.father.gid
                 if not sfgid:
                     sfgid = "None"
-                print("Check father ids: "+fgid+" vs "+sfgid)
+                print(_("Check father ids: ")+fgid+_(" vs ")+sfgid)
                 if not mother:
                     mgid = None
                 else:
@@ -634,7 +779,7 @@ class GFamily(GBase):
                 smgid = self.mother.gid
                 if not smgid:
                     smgid = "None"
-                print("Check mother ids: "+mgid+" vs "+smgid)
+                print(_("Check mother ids: ")+mgid+_(" vs ")+smgid)
             if self.father and father and father.gramps_id == self.father.gid \
                 and self.mother and mother and mother.gramps_id == self.mother.gid:
                 return(f)
@@ -649,10 +794,10 @@ class GFamily(GBase):
         idx = 0
         for sr in self.father.spouseref:
             if verbosity >= 3:
-                print('Comparing sr %s to %s (idx: %d)'%(sr,self.mother.url,idx))
+                print(_("Comparing sr %s to %s (idx: %d)")%(sr,self.mother.url,idx))
             if sr == self.mother.url:
                 if verbosity >= 2:
-                    print('Spouse %s found (idx: %d)'%(sr,idx))
+                    print(_("Spouse %s found (idx: %d)")%(sr,idx))
                 break
             idx = idx + 1
 
@@ -666,7 +811,7 @@ class GFamily(GBase):
 
         if self.g_marriagedate and self.g_marriageplace and self.g_marriageplacecode:
             if verbosity >= 2:
-                print('Geneanet Marriage found the %s at %s (%s)'%(self.g_marriagedate,self.g_marriageplace,self.g_marriageplacecode))
+                print(_("Geneanet Marriage found the %s at %s (%s)")%(self.g_marriagedate,self.g_marriageplace,self.g_marriageplacecode))
 
 
     def from_gramps(self,gid):
@@ -674,14 +819,14 @@ class GFamily(GBase):
         Initiate the GFamily from Gramps data
         '''
         if verbosity >= 2:
-            print("Calling from_gramps with gid: %s"%(gid))
+            print(_("Calling from_gramps with gid: %s")%(gid))
 
         # If our gid was already setup and we didn't pass one
         if not gid and self.gid:
             gid = self.gid
 
         if verbosity >= 2:
-            print("Now gid is: %s"%(gid))
+            print(_("Now gid is: %s")%(gid))
 
         found = None
         try:
@@ -689,7 +834,7 @@ class GFamily(GBase):
             self.gid = gid
             self.family = found
             if verbosity >= 2:
-                print("Existing gid of a Gramps Family: %s"%(self.gid))
+                print(_("Existing gid of a Gramps Family: %s")%(self.gid))
         except:
             if verbosity >= 1:
                 print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
@@ -700,7 +845,7 @@ class GFamily(GBase):
             self.family = self.find_grampsf()
             if self.family:
                 if verbosity >= 2:
-                    print("Found an existing Gramps family "+self.family.gramps_id)
+                    print(_("Found an existing Gramps family ")+self.family.gramps_id)
                 self.gid = self.family.gramps_id
             # And if we haven't found it, create it in gramps
             if self.family == None:
@@ -722,7 +867,7 @@ class GFamily(GBase):
 
             if verbosity >= 2:
                 if self.marriagedate and self.marriageplace and self.marriageplacecode:
-                    print('Gramps Marriage found the %s at %s (%s)'%(self.marriagedate,self.marriageplace,self.marriageplacecode))
+                    print(_("Gramps Marriage found the %s at %s (%s)")%(self.marriagedate,self.marriageplace,self.marriageplacecode))
 
     def to_gramps(self):
         '''
@@ -739,7 +884,7 @@ class GFamily(GBase):
                 grampsp0 = db.get_person_from_gramps_id(self.father.gid)
             except:
                 if verbosity >= 2:
-                    print('No father for this family')
+                    print(_("No father for this family"))
                 grampsp0 = None
 
             if grampsp0:
@@ -747,7 +892,7 @@ class GFamily(GBase):
                     self.family.set_father_handle(grampsp0.get_handle())
                 except:
                     if verbosity >= 2:
-                        print("Can't affect father to the family")
+                        print(_("Can't affect father to the family"))
 
                 db.commit_family(self.family,tran)
                 grampsp0.add_family_handle(self.family.get_handle())
@@ -757,7 +902,7 @@ class GFamily(GBase):
                 grampsp1 = db.get_person_from_gramps_id(self.mother.gid)
             except:
                 if verbosity >= 2:
-                    print('No mother for this family')
+                    print(_("No mother for this family"))
                 grampsp1 = None
 
             if grampsp1:
@@ -765,7 +910,7 @@ class GFamily(GBase):
                     self.family.set_mother_handle(grampsp1.get_handle())
                 except:
                     if verbosity >= 2:
-                        print("Can't affect mother to the family")
+                        print(_("Can't affect mother to the family"))
 
                 db.commit_family(self.family,tran)
                 grampsp1.add_family_handle(self.family.get_handle())
@@ -779,7 +924,7 @@ class GFamily(GBase):
         Smart Copying GFamily
         '''
         if verbosity >= 2:
-            print("Smart Copying Family")
+            print(_("Smart Copying Family"))
         self._smartcopy("marriagedate")
         self._smartcopy("marriageplace")
         self._smartcopy("marriageplacecode")
@@ -796,21 +941,21 @@ class GFamily(GBase):
             if c.gramps_id == child.gid:
                 found = child
                 if verbosity >= 1:
-                    print("Child already existing : "+child.firstname+" "+child.lastname)
+                    print(_("Child already existing : ")+child.firstname+" "+child.lastname)
                 break
             # Ensure that the child is part of the family
 
         if not found:
             if child:
-                if verbosity >= 1:
-                    print("Adding Child : "+child.firstname+" "+child.lastname)
+                if verbosity >= 2:
+                    print(_("Adding child: ")+child.firstname+" "+child.lastname)
                 childref = ChildRef()
                 if child.grampsp:
                     try:
                         childref.set_reference_handle(child.grampsp.get_handle())
                     except:
                         if verbosity >= 2:
-                            print('No handle for this child')
+                            print(_("No handle for this child"))
                     self.family.add_child_ref(childref)
                     with DbTxn("Geneanet import", db) as tran:
                         db.commit_family(self.family,tran)
@@ -825,7 +970,7 @@ class GFamily(GBase):
             cpt = len(self.g_childref)
         except:
             if verbosity >= 1:
-                print("Stopping exploration as there are no more children for family "+self.father.lastname+" - "+self.mother.lastname)
+                print(_("Stopping exploration as there are no more children for family ")+self.fater.firstname+" "+self.father.lastname+" - "+self.mother.firstname+" "+self.mother.lastname)
             return
         loop = False
         # Recurse while we have children urls and level not reached
@@ -834,14 +979,14 @@ class GFamily(GBase):
             level = level + 1
 
             if not self.family:
-                print("WARNING: No family found whereas there should be one :-(")
+                print(_("WARNING: No family found whereas there should be one :-("))
                 return
 
             # Create a GPerson from all children mentioned in Geneanet
             for c in self.g_childref:
                 child = geneanet_to_gramps(None,level-1,None,c)
                 if verbosity >= 2:
-                    print("=> Recursion on the child of "+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
+                    print(_("=> Recursion on the child of ")+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
                 self.add_child(child)
 
                 fam = []
@@ -858,17 +1003,17 @@ class GFamily(GBase):
                              f.recurse_children(level)
     
                 if verbosity >= 2:
-                    print("=> End of recursion on the child of "+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
+                    print(_("=> End of recursion on the child of ")+self.father.lastname+' - '+self.mother.lastname+': '+child.firstname+' '+child.lastname)
 
         if not loop:
             if cpt == 0:
                 if verbosity >= 1:
-                    print("Stopping exploration for family "+self.father.lastname+' - '+self.mother.lastname+" as there are no more children")
+                    print(_("Stopping exploration for family ")+self.father.firstname+" "+self.father.lastname+' - '+self.mother.firstname+" "+self.mother.lastname+_(" as there are no more children"))
                 return
     
             if level > LEVEL:
                 if verbosity >= 1:
-                    print("Stopping exploration for family "+self.father.lastname+' - '+self.mother.lastname+" as we reached level "+str(level))
+                    print(_("Stopping exploration for family ")+self.father.firstname+" "+self.father.lastname+' - '+self.mother.firstname+" "+self.mother.lastname+_(" as we reached level ")+str(level))
         return
         
 class GPerson(GBase):
@@ -877,7 +1022,7 @@ class GPerson(GBase):
     '''
     def __init__(self,level):
         if verbosity >= 3:
-            print("Initialize Person at level %d"%(level))
+            print(_("Initialize Person at level %d")%(level))
         # Counter
         self.level = level
         # Gramps
@@ -922,7 +1067,7 @@ class GPerson(GBase):
         Smart Copying GPerson
         '''
         if verbosity >= 2:
-            print("Smart Copying Person",self.gid)
+            print(_("Smart Copying Person"),self.gid)
         self._smartcopy("firstname")
         self._smartcopy("lastname")
         self._smartcopy("sex")
@@ -943,23 +1088,22 @@ class GPerson(GBase):
         '''
 
         # Needed as Geneanet returned relative links
-        ROOTURL = 'https://gw.geneanet.org/'
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
 
         if verbosity >= 3:
-            print("Purl:",purl)
+            print(_("Purl:"),purl)
         if not purl:
             return()
         try:
             if verbosity >= 1:
-                print('-----------------------------------------------------------')
-                print("Page considered:",purl)
+                print("-----------------------------------------------------------")
+                print(_("Page considered:"),purl)
             page = requests.get(purl)
             if verbosity >= 3:
                 print(_("Return code:"),page.status_code)
         except:
-            print("We failed to reach the server at",purl)
+            print(_("We failed to reach the server at"),purl)
         else:
             if page.ok:
                 try:
@@ -985,9 +1129,9 @@ class GPerson(GBase):
                     self.g_firstname = ""
                     self.g_lastname = ""
                 if verbosity >= 1:
-                    print('==> GENEANET Name (L%d): %s %s'%(self.level,self.g_firstname,self.g_lastname))
+                    print(_("==> GENEANET Name (L%d): %s %s")%(self.level,self.g_firstname,self.g_lastname))
                 if verbosity >= 2:
-                    print('Sex:', self.g_sex)
+                    print(_("Sex:"), self.g_sex)
                 try:
                     birth = tree.xpath('//li[contains(., "Né")]/text()')
                 except:
@@ -1008,14 +1152,14 @@ class GPerson(GBase):
                 try:
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
                     if verbosity >= 2:
-                        print('Birth:', ld)
+                        print(_("Birth:"), ld)
                     self.g_birthdate = format_ca(ld)
                 except:
                     self.g_birthdate = None
                 try:
                     self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip())
                     if verbosity >= 2:
-                        print('Birth place:', self.g_birthplace)
+                        print(_("Birth place:"), self.g_birthplace)
                 except:
                     self.g_birthplace = None
                 try:
@@ -1025,20 +1169,20 @@ class GPerson(GBase):
                         self.g_birthplacecode = None
                     else:
                         if verbosity >= 2:
-                            print('Birth place code:', self.g_birthplacecode)
+                            print(_("Birth place code:"), self.g_birthplacecode)
                 except:
                     self.g_birthplacecode = None
                 try:
                     ld = convert_date(death[0].split('-')[0].split()[1:])
                     if verbosity >= 2:
-                        print('Death:', ld)
+                        print(_("Death:"), ld)
                     self.g_deathdate = format_ca(ld)
                 except:
                     self.g_deathdate = None
                 try:
                     self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip()
                     if verbosity >= 2:
-                        print('Death place:', self.g_deathplace)
+                        print(_("Death place:"), self.g_deathplace)
                 except:
                     self.g_deathplace = None
                 try:
@@ -1048,7 +1192,7 @@ class GPerson(GBase):
                         self.g_deathplacecode = None
                     else:
                         if verbosity >= 2:
-                            print('Death place code:', self.g_deathplacecode)
+                            print(_("Death place code:"), self.g_deathplacecode)
                 except:
                     self.g_deathplacecode = None
 
@@ -1060,14 +1204,14 @@ class GPerson(GBase):
                     try:
                         sname.append(str(spouse.xpath('a/text()')[0]))
                         if verbosity >= 2:
-                            print('Spouse name:', sname[s])
+                            print(_("Spouse name:"), sname[s])
                     except:
                         sname.append("")
 
                     try:
                         sref.append(str(spouse.xpath('a/attribute::href')[0]))
                         if verbosity >= 2:
-                            print('Spouse ref:', ROOTURL+sref[s])
+                            print(_("Spouse ref:"), ROOTURL+sref[s])
                     except:
                         sref.append("")
                     self.spouseref.append(ROOTURL+sref[s])
@@ -1079,14 +1223,14 @@ class GPerson(GBase):
                     try:
                         ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if verbosity >= 2:
-                            print('Married:', ld)
+                            print(_("Married:"), ld)
                         self.marriagedate.append(format_ca(ld))
                     except:
                         self.marriagedate.append(None)
                     try:
                         self.marriageplace.append(str(marriage[s].split(',')[1][1:]))
                         if verbosity >= 2:
-                            print('Married place:', self.marriageplace[s])
+                            print(_("Married place:"), self.marriageplace[s])
                     except:
                         self.marriageplace.append(None)
                     try:
@@ -1096,7 +1240,7 @@ class GPerson(GBase):
                             self.marriageplacecode.append(None)
                         else:
                             if verbosity >= 2:
-                                print('Married place code:', self.marriageplacecode[s])
+                                print(_("Married place code:"), self.marriageplacecode[s])
                             self.marriageplacecode.append(marriageplacecode)
                     except:
                         self.marriageplacecode.append(None)
@@ -1107,13 +1251,13 @@ class GPerson(GBase):
                         try:
                             cname = c.xpath('a/text()')[0]
                             if verbosity >= 2:
-                                print('Child %d name: %s'%(cnum,cname))
+                                print(_("Child %d name: %s")%(cnum,cname))
                         except:
                             cname = None
                         try:
                             cref = ROOTURL+str(c.xpath('a/attribute::href')[0])
                             if verbosity >= 2:
-                                print('Child %d ref: %s'%(cnum,cref))
+                                print(_("Child %d ref: %s")%(cnum,cref))
                         except:
                             cref = None
                         clist.append(cref)
@@ -1131,17 +1275,15 @@ class GPerson(GBase):
                     if p.xpath('text()')[0] == '\n':
                         try:
                             pname = p.xpath('a/text()')[0]
-                            if verbosity >= 1:
-                                print('Parent name: %s'%(pname))
                         except:
                             pname = ""
                             # if pname is ? ? then go to next one
                         try:
                             pref = p.xpath('a/attribute::href')[0]
-                            if verbosity >= 1:
-                                print('Parent ref:', ROOTURL+pref)
                         except:
                             pref = ""
+                        if verbosity >= 1:
+                           print(_("Parent name: %s (%s)")%(pname,ROOTURL+pref))
                         prefl.append(ROOTURL+str(pref))
                 try:
                     self.fref = prefl[0]
@@ -1152,7 +1294,7 @@ class GPerson(GBase):
                 except:
                     self.mref = ""
                 if verbosity >= 2:
-                    print('-----------------------------------------------------------')
+                    print("-----------------------------------------------------------")
     
             else:
                 print(_("We failed to be ok with the server"))
@@ -1167,8 +1309,8 @@ class GPerson(GBase):
             db.add_person(grampsp,tran)
             self.gid = grampsp.gramps_id
             self.grampsp = grampsp
-            if verbosity >= 2:
-                print("Create new Gramps Person: "+self.gid+' ('+self.g_firstname+' '+self.g_lastname+')')
+            if verbosity >= 1:
+                print(_("Create new Gramps Person: ")+self.gid+' ('+self.g_firstname+' '+self.g_lastname+')')
 
 
     def find_grampsp(self):
@@ -1180,7 +1322,7 @@ class GPerson(GBase):
         ids = db.get_person_gramps_ids()
         for i in ids:
             if verbosity >= 3:
-                print("DEBUG: Looking after "+i)
+                print(_("DEBUG: Looking after ")+i)
             p = db.get_person_from_gramps_id(i)
             try:
                 name = p.primary_name.get_name().split(', ')
@@ -1206,8 +1348,8 @@ class GPerson(GBase):
             dd = self.get_gramps_date(EventType.DEATH)
             dd = format_year(dd)
             if verbosity >= 3:
-                print("DEBUG: firstname: "+firstname+" vs g_firstname: "+self.g_firstname)
-                print("DEBUG: lastname: "+lastname+" vs g_lastname: "+self.g_lastname)
+                print(_("DEBUG: firstname: ")+firstname+_(" vs g_firstname: ")+self.g_firstname)
+                print(_("DEBUG: lastname: ")+lastname+_(" vs g_lastname: ")+self.g_lastname)
                 if not bd:
                     pbd = "None"
                 else:
@@ -1224,8 +1366,8 @@ class GPerson(GBase):
                     g_pdd = "None"
                 else:
                     g_pdd = self.g_deathdate
-                print("DEBUG: bd: "+pbd+" vs g_bd: "+g_pbd)
-                print("DEBUG: dd: "+pdd+" vs g_dd: "+g_pdd)
+                print(_("DEBUG: bd: ")+pbd+_(" vs g_bd: ")+g_pbd)
+                print(_("DEBUG: dd: ")+pdd+_(" vs g_dd: ")+g_pdd)
             if firstname != self.g_firstname or lastname != self.g_lastname:
                 # it's not the right person finally
                 self.grampsp = None
@@ -1238,7 +1380,7 @@ class GPerson(GBase):
             if bd == self.g_birthdate or dd == self.g_deathdate:
                 self.gid = p.gramps_id
                 if verbosity >= 2:
-                    print("Found a Gramps Person: "+self.g_firstname+' '+self.g_lastname+ " ("+self.gid+")")
+                    print(_("Found a Gramps Person: ")+self.g_firstname+' '+self.g_lastname+ " ("+self.gid+")")
                 # Found it we can exit
                 break
             else:
@@ -1258,7 +1400,7 @@ class GPerson(GBase):
             grampsp = self.grampsp
             if not grampsp:
                 if verbosity >= 2:
-                    print("ERROR: Unable sync unknown Gramps Person")
+                    print(_("ERROR: Unable sync unknown Gramps Person"))
                 return
 
             if self.sex == 'H':
@@ -1305,14 +1447,14 @@ class GPerson(GBase):
         GENDER = ['F', 'H', 'I']
 
         if verbosity >= 2:
-            print("Calling from_gramps with gid: %s"%(gid))
+            print(_("Calling from_gramps with gid: %s")%(gid))
 
         # If our gid was already setup and we didn't pass one
         if not gid and self.gid:
             gid = self.gid
 
         if verbosity >= 3:
-            print("Now gid is: %s"%(gid))
+            print(_("Now gid is: %s")%(gid))
 
         found = None
         try:
@@ -1320,7 +1462,7 @@ class GPerson(GBase):
             self.gid = gid
             self.grampsp = found
             if verbosity >= 2 and self.gid:
-                print("Existing Gramps Person: %s"%(self.gid))
+                print(_("Existing Gramps Person: %s")%(self.gid))
         except:
             if verbosity >= 1:
                 print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
@@ -1335,8 +1477,8 @@ class GPerson(GBase):
 
         if self.grampsp.gender:
             self.sex = GENDER[self.grampsp.gender]
-            if verbosity >= 1:
-                print("Gender:",self.sex)
+            if verbosity >= 2:
+                print(_("Gender:"),self.sex)
 
         try:
             name = self.grampsp.primary_name.get_name().split(', ')
@@ -1347,18 +1489,18 @@ class GPerson(GBase):
             self.firstname = name[1]
         if name[1]:
             self.lastname = name[0]
-        if verbosity >= 1:
-            print("===> Gramps Name of %s: %s %s"%(self.gid,self.firstname,self.lastname))
+        if verbosity >= 2:
+            print(_("===> Gramps Name of %s: %s %s")%(self.gid,self.firstname,self.lastname))
 
         try:
             bd = self.get_gramps_date(EventType.BIRTH)
             if bd:
-                if verbosity >= 1:
-                    print("Birth:",bd)
+                if verbosity >= 2:
+                    print(_("Birth:"),bd)
                 self.birthdate = bd
             else:
-                if verbosity >= 1:
-                    print("No Birth date")
+                if verbosity >= 2:
+                    print(_("No Birth date"))
         except:
             if verbosity >= 1:
                 print(_("WARNING: Unable to retrieve birth date for id %s")%(self.gid))
@@ -1366,12 +1508,12 @@ class GPerson(GBase):
         try:
             dd = self.get_gramps_date(EventType.DEATH)
             if dd:
-                if verbosity >= 1:
-                    print("Death:",dd)
+                if verbosity >= 2:
+                    print(_("Death:"),dd)
                 self.deathdate = dd
             else:
-                if verbosity >= 1:
-                    print("No Death date")
+                if verbosity >= 2:
+                    print(_("No Death date"))
         except:
             if verbosity >= 1:
                 print(_("WARNING: Unable to retrieve death date for id %s")%(self.gid))
@@ -1383,32 +1525,32 @@ class GPerson(GBase):
             fh = self.grampsp.get_main_parents_family_handle()
             if fh:
                 if verbosity >= 3:
-                    print("Family:",fh)
+                    print(_("Family:"),fh)
                 fam = db.get_family_from_handle(fh)
                 if fam:
                     if verbosity >= 3:
-                        print("Family:",fam)
+                        print(_("Family:"),fam)
 
                 # find father from the family
                 fh = fam.get_father_handle()
                 if fh:
                     if verbosity >= 3:
-                        print("Father H:",fh)
+                        print(_("Father H:"),fh)
                     father = db.get_person_from_handle(fh)
                     if father:
                         if verbosity >= 1:
-                            print("Father name:",father.primary_name.get_name())
+                            print(_("Father name:"),father.primary_name.get_name())
                         self.father.gid = father.gramps_id
 
                 # find mother from the family
                 mh = fam.get_mother_handle()
                 if mh:
                     if verbosity >= 3:
-                        print("Mother H:",mh)
+                        print(_("Mother H:"),mh)
                     mother = db.get_person_from_handle(mh)
                     if mother:
                         if verbosity >= 1:
-                            print("Mother name:",mother.primary_name.get_name())
+                            print(_("Mother name:"),mother.primary_name.get_name())
                         self.mother.gid = mother.gramps_id
 
         except:
@@ -1436,14 +1578,14 @@ class GPerson(GBase):
                     spouse.spouse.append(self)
                     # Create a GFamily with them and do a Geaneanet to Gramps for it
                     if verbosity >= 2:
-                        print("=> Initialize Family of "+self.firstname+" "+self.lastname+" and "+spouse.firstname+" "+spouse.lastname)
+                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" & "+spouse.firstname+" "+spouse.lastname)
                 if self.sex == 'H':
                     f = GFamily(self,spouse)
                 elif self.sex == 'F':
                     f = GFamily(spouse,self)
                 else:
                     if verbosity >= 1:
-                        print("Unable to Initialize Family of "+self.firstname+" "+self.lastname+" sex unknown")
+                        print(_("Unable to Initialize Family of ")+self.firstname+" "+self.lastname+_(" sex unknown"))
                         break
 
                 f.from_geneanet()
@@ -1472,26 +1614,26 @@ class GPerson(GBase):
                     self.mother.spouse.append(self.father)
 
                 if verbosity >= 2:
-                    print("=> Recursing on the parents of "+self.father.firstname+" "+self.father.lastname)
+                    print(_("=> Recursing on the parents of ")+self.father.firstname+" "+self.father.lastname)
                 self.father.recurse_parents(level)
 
                 if verbosity >= 2:
-                    print("=> End of recursion on the parents of "+self.father.firstname+" "+self.father.lastname)
+                    print(_("=> End of recursion on the parents of ")+self.father.firstname+" "+self.father.lastname)
 
             if self.mother:
                 geneanet_to_gramps(self.mother,level,self.mother.gid,self.mref)
                 if self.father:
                     self.father.spouse.append(self.mother)
                 if verbosity >= 2:
-                    print("=> Recursing on the mother of "+self.mother.firstname+" "+self.mother.lastname)
+                    print(_("=> Recursing on the mother of ")+self.mother.firstname+" "+self.mother.lastname)
                 self.mother.recurse_parents(level)
 
                 if verbosity >= 2:
-                    print("=> End of recursing on the mother of "+self.mother.firstname+" "+self.mother.lastname)
+                    print(_("=> End of recursing on the mother of ")+self.mother.firstname+" "+self.mother.lastname)
 
             # Create a GFamily with them and do a Geaneanet to Gramps for it
             if verbosity >= 2:
-                print("=> Initialize Parents Family of "+self.firstname+" "+self.lastname)
+                print(_("=> Initialize Parents Family of ")+self.firstname+" "+self.lastname)
             f = GFamily(self.father,self.mother)
             f.from_geneanet()
             f.from_gramps(f.gid)
@@ -1531,11 +1673,11 @@ class GPerson(GBase):
     
         if not loop:
             if level > LEVEL:
-                if verbosity >= 1:
-                    print("Stopping exploration as we reached level "+str(level))
+                if verbosity >= 2:
+                    print(_("Stopping exploration as we reached level ")+str(level))
             else:
                 if verbosity >= 1:
-                    print("Stopping exploration as there are no more parents")
+                    print(_("Stopping exploration as there are no more parents"))
         return
 
 
@@ -1543,6 +1685,8 @@ def geneanet_to_gramps(p, level, gid, url):
     '''
     Function to create a person from Geneanet into gramps
     '''
+    global progress
+
     # Create the Person coming from Geneanet
     if not p:
         p = GPerson(level)
@@ -1555,10 +1699,13 @@ def geneanet_to_gramps(p, level, gid, url):
     # Check we point to the same person
     if gid != None:
         if (p.firstname != p.g_firstname or p.lastname != p.g_lastname) and (not force):
-            print("Gramps   person: %s %s"%(p.firstname,p.lastname))
-            print("Geneanet person: %s %s"%(p.g_firstname,p.g_lastname))
-            db.close()
-            sys.exit("Do not continue without force")
+            print(_("Gramps   person: %s %s")%(p.firstname,p.lastname))
+            print(_("Geneanet person: %s %s")%(p.g_firstname,p.g_lastname))
+            if not GUIMODE:
+                db.close()
+                sys.exit(_("Do not continue without force"))
+            else:
+                return(None)
 
         # Fix potential empty dates
         if p.g_birthdate == "":
@@ -1573,15 +1720,44 @@ def geneanet_to_gramps(p, level, gid, url):
         if p.birthdate == p.g_birthdate or p.deathdate == p.g_deathdate or force:
             pass
         else:
-            print("Gramps   person birth/death: %s / %s"%(p.birthdate,p.deathdate))
-            print("Geneanet person birth/death: %s / %s"%(p.g_birthdate,p.g_deathdate))
-            db.close()
-            sys.exit("Do not continue without force")
+            print(_("Gramps   person birth/death: %s / %s")%(p.birthdate,p.deathdate))
+            print(_("Geneanet person birth/death: %s / %s")%(p.g_birthdate,p.g_deathdate))
+            if not GUIMODE:
+                db.close()
+                sys.exit(_("Do not continue without force"))
+            else:
+                return(None)
 
     # Copy from Geneanet into Gramps and commit
     p.to_gramps()
+    if GUIMODE:
+        progress.set_header(_("Adding Gramps person %s %s (%s-%s)")%(p.firstname,p.lastname,p.birthdate,p.deathdate))
+        progress.step()
     return(p)
 
+def g2gaction(gid,purl):
+    global progress
+
+    # Create the first Person 
+    gp = geneanet_to_gramps(None,0,gid,purl)
+    
+    if gp != None:
+        if ascendants:
+            gp.recurse_parents(0)
+    
+        fam = []
+        if spouses:
+            fam = gp.add_spouses(0)
+        else:
+            # TODO: If we don't ask for spouses, we won't get children at all
+            pass
+
+        if descendants:
+            for f in fam:
+                f.recurse_children(0)
+    if GUIMODE:
+        progress.close()
+ 
 def main():
 
     # global allow local modification of these global variables
@@ -1595,16 +1771,16 @@ def main():
     global LEVEL
 
 
-    parser = argparse.ArgumentParser(description="Import Geneanet subtrees into Gramps")
-    parser.add_argument("-v", "--verbosity", action="count", default=0, help="Increase verbosity")
-    parser.add_argument("-a", "--ascendants", default=False, action='store_true', help="Includes ascendants (off by default)")
-    parser.add_argument("-d", "--descendants", default=False, action='store_true', help="Includes descendants (off by default)")
-    parser.add_argument("-s", "--spouses", default=False, action='store_true', help="Includes all spouses (off by default)")
-    parser.add_argument("-l", "--level", default=2, type=int, help="Number of level to explore (2 by default)")
-    parser.add_argument("-g", "--grampsfile", type=str, help="Name of the Gramps database")
-    parser.add_argument("-i", "--id", type=str, help="ID of the person to start from in Gramps")
-    parser.add_argument("-f", "--force", default=False, action='store_true', help="Force processing")
-    parser.add_argument("searchedperson", type=str, nargs='?', help="Url of the person to search in Geneanet")
+    parser = argparse.ArgumentParser(description=_("Import Geneanet subtrees into Gramps"))
+    parser.add_argument("-v", "--verbosity", action="count", default=0, help=_("Increase verbosity"))
+    parser.add_argument("-a", "--ascendants", default=False, action='store_true', help=_("Includes ascendants (off by default)"))
+    parser.add_argument("-d", "--descendants", default=False, action='store_true', help=_("Includes descendants (off by default)"))
+    parser.add_argument("-s", "--spouses", default=False, action='store_true', help=_("Includes all spouses (off by default)"))
+    parser.add_argument("-l", "--level", default=2, type=int, help=_("Number of level to explore (2 by default)"))
+    parser.add_argument("-g", "--grampsfile", type=str, help=_("Full path of the Gramps database (under $HOME/.gramps/grampsdb)"))
+    parser.add_argument("-i", "--id", type=str, help=_("ID of the person to start from in Gramps"))
+    parser.add_argument("-f", "--force", default=False, action='store_true', help=_("Force processing"))
+    parser.add_argument("searchedperson", type=str, nargs='?', help=_("Url of the person to search in Geneanet"))
     args = parser.parse_args()
 
     if args.searchedperson == None:
@@ -1635,7 +1811,7 @@ def main():
         ErrorDialog(_("Opening the '%s' database") % gname,
                     _("An attempt to convert the database failed. "
                       "Perhaps it needs updating."), parent=self.top)
-        sys.exit()
+        sys.exit(-1)
     	
     gid = args.id
     if gid == None:
@@ -1645,25 +1821,14 @@ def main():
     ids = db.get_person_gramps_ids()
     for i in ids:
         if verbosity >= 3:
-            print("DEBUG: existing gramps id:"+i)
+            print(_("DEBUG: existing gramps id:")+i)
     
     if verbosity >= 1 and force:
-        print("WARNING: Force mode activated")
+        print(_("WARNING: Force mode activated"))
         time.sleep(TIMEOUT)
     
-    # Create the first Person 
-    gp = geneanet_to_gramps(None,0,gid,purl)
-    
-    if ascendants:
-       gp.recurse_parents(0)
-    
-    fam = []
-    if spouses:
-       fam = gp.add_spouses(0)
-    if descendants:
-        for f in fam:
-            f.recurse_children(0)
-    
+    g2gaction(gid,purl)
+   
     db.close()
     sys.exit(0)
     
