@@ -77,6 +77,7 @@ LOG = logging.getLogger("GeneanetForGramps")
 
 TIMEOUT = 5
 
+# TODO: Is it useful ?
 LANGUAGES = {
     'cs' : 'Czech', 'da' : 'Danish','nl' : 'Dutch',
     'en' : 'English','eo' : 'Esperanto', 'fi' : 'Finnish',
@@ -86,12 +87,12 @@ LANGUAGES = {
     'ro' : 'Romanian', 'sk' : 'Slovak', 'es' : 'Spanish',
     'sv' : 'Swedish', 'ru' : 'Russian',
     }
-
 WIKI_HELP_PAGE = '%s_-_Tools' % URL_MANUAL_PAGE
 WIKI_HELP_SEC = _('manual|GeneanetForGramps')
 
+# Global variables
 db = None
-gname = "/users/bruno/.gramps/grampsdb/5ec17554"
+gname = None
 verbosity = 0
 force = False
 ascendants = False
@@ -405,10 +406,10 @@ class GBase:
 
         # Managing sex, Gramps is always right except when unknown
         # Warn on conflict
-        if attr == 'sex' and self.__dict__[attr] == 'I' and self.__dict__['g_'+attr] != 'I':
+        if attr == 'sex' and self.__dict__[attr] == 'U' and self.__dict__['g_'+attr] != 'U':
             scopy = True
-            if (self.__dict__[attr] == 'F' and self.__dict__['g_'+attr] == 'H') \
-            or (self.__dict__[attr] == 'H' and self.__dict__['g_'+attr] == 'F'):
+            if (self.__dict__[attr] == 'F' and self.__dict__['g_'+attr] == 'M') \
+            or (self.__dict__[attr] == 'M' and self.__dict__['g_'+attr] == 'F'):
                 if verbosity >= 1:
                     print(_("WARNING: Gender conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps (")+self.__dict__[attr]+_("), keeping Gramps value"))
                 scopy = False
@@ -994,7 +995,7 @@ class GFamily(GBase):
                      fam = child.add_spouses(level)
                      if ascendants:
                          for f in fam:
-                             if child.sex == 'H':
+                             if child.sex == 'M':
                                  f.mother.recurse_parents(level-1)
                              if child.sex == 'F':
                                  f.father.recurse_parents(level-1)
@@ -1028,7 +1029,7 @@ class GPerson(GBase):
         # Gramps
         self.firstname = ""
         self.lastname = ""
-        self.sex = 'I'
+        self.sex = 'U'
         self.birthdate = None
         self.birthplace = None
         self.birthplacecode = None
@@ -1046,7 +1047,7 @@ class GPerson(GBase):
         # Geneanet
         self.g_firstname = ""
         self.g_lastname = ""
-        self.g_sex = 'I'
+        self.g_sex = 'U'
         self.g_birthdate = None
         self.g_birthplace = None
         self.g_birthplacecode = None
@@ -1116,11 +1117,11 @@ class GPerson(GBase):
                 # between 2 and 7 seconds
                 time.sleep(random.randint(2,7))
                 try:
-                    # Should return F or H
+                    # Should return M or F
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
                     self.g_sex = sex[0]
                 except:
-                    self.g_sex = 'I'
+                    self.g_sex = 'U'
                 try:
                     name = tree.xpath('//div[@id="person-title"]//a/text()')
                     self.g_firstname = str(name[0])
@@ -1403,7 +1404,7 @@ class GPerson(GBase):
                     print(_("ERROR: Unable sync unknown Gramps Person"))
                 return
 
-            if self.sex == 'H':
+            if self.sex == 'M':
                 grampsp.set_gender(Person.MALE)
             elif self.sex == 'F':
                 grampsp.set_gender(Person.FEMALE)
@@ -1444,7 +1445,7 @@ class GPerson(GBase):
         Fill a GPerson with its Gramps data
         '''
 
-        GENDER = ['F', 'H', 'I']
+        GENDER = ['F', 'M', 'U']
 
         if verbosity >= 2:
             print(_("Calling from_gramps with gid: %s")%(gid))
@@ -1579,7 +1580,7 @@ class GPerson(GBase):
                     # Create a GFamily with them and do a Geaneanet to Gramps for it
                     if verbosity >= 2:
                         print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" & "+spouse.firstname+" "+spouse.lastname)
-                if self.sex == 'H':
+                if self.sex == 'M':
                     f = GFamily(self,spouse)
                 elif self.sex == 'F':
                     f = GFamily(spouse,self)
@@ -1785,7 +1786,9 @@ def main():
 
     if args.searchedperson == None:
         #purl = 'https://gw.geneanet.org/agnesy?lang=fr&pz=hugo+mathis&nz=renard&p=marie+sebastienne&n=helgouach'
-        purl = 'https://gw.geneanet.org/agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
+        #purl = 'https://gw.geneanet.org/agnesy?lang=fr&n=queffelec&oc=17&p=marie+anne'
+        print(_("Please provide a person to search for"))
+        sys.exit(-1)
     else:
         purl = args.searchedperson
 
@@ -1797,11 +1800,13 @@ def main():
     spouses = args.spouses
     LEVEL = args.level
 	
-    # TODO: do a backup before opening
+    # TODO: do a backup before opening and remove fixed path
     if gname == None:
         #gname = "Test import"
         # To be searched in ~/.gramps/recent-files-gramps.xml
-        gname = "/users/bruno/.gramps/grampsdb/5ec17554"
+        #gname = "/users/bruno/.gramps/grampsdb/5ec17554"
+        print(_("Please provide a grampsfile to search into"))
+        sys.exit(-1)
     try:
         dbstate = DbState()
         climanager = CLIManager(dbstate, True, None)
