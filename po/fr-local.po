@@ -18,7 +18,7 @@ msgstr ""
 
 #: PersonEverything/PersonEverything.gpr.py:31
 msgid "PersonEverything Report"
-msgstr "Rapport Tout sur la personne"
+msgstr "Rapporte Tout sur l'individu"
 
 #: GeneanetForGramps.py:91
 msgid "manual|GeneanetForGramps"
@@ -55,11 +55,11 @@ msgstr "Options de l'import Geneanet"
 
 #: GeneanetForGramps.py:224
 msgid "Center Person"
-msgstr "Personne considérée"
+msgstr "Individu considéré"
 
 #: GeneanetForGramps.py:225
 msgid "The center person for the filter"
-msgstr "Personne considérée pour le filtre"
+msgstr "Individu considéré pour le filtre"
 
 #: GeneanetForGramps.py:229
 msgid "Before URL"
@@ -67,14 +67,14 @@ msgstr "Avant URL"
 
 #: GeneanetForGramps.py:230
 msgid "Geneanet URL for the selected person"
-msgstr "URL Geneanet pour la personne sélectionnée"
+msgstr "URL Geneanet pour l'individu sélectionné"
 
 #: GeneanetForGramps.py:231
 msgid ""
 "URL on Geneanet of the person you have selected which will be used as an "
 "import base such as https://gw.geneanet.org/agnesy?"
 "lang=fr&n=queffelec&oc=17&p=marie+anne"
-msgstr "URL sur Geneanet de la personne que vous avez sélectionnée et qui sera utilisée comme base d'importation telle que https://gw.geneanet.org/agnesy?"
+msgstr "URL sur Geneanet de l'individu que vous avez sélectionnée et qui sera utilisée comme base d'importation telle que https://gw.geneanet.org/agnesy?"
 "lang=fr&n=queffelec&oc=17&p=marie+anne"
 
 #: GeneanetForGramps.py:235
@@ -95,7 +95,7 @@ msgstr "Importation des ascendants"
 
 #: GeneanetForGramps.py:243
 msgid "Import ascendants of the selected person up to level number"
-msgstr "Importation des ascendants de la personne sélectionée jusqu'au niveau indiqué"
+msgstr "Importation des ascendants de l'individu sélectioné jusqu'au niveau indiqué"
 
 #: GeneanetForGramps.py:247
 msgid "Before DSC"
@@ -115,7 +115,7 @@ msgstr "Importation des descendants"
 
 #: GeneanetForGramps.py:255
 msgid "Import descendants of the selected person up to level number"
-msgstr "Importation des descendants de la personne sélectionée jusqu'au niveau indiqué"
+msgstr "Importation des descendants de l'individu sélectioné jusqu'au niveau indiqué"
 
 #: GeneanetForGramps.py:259
 msgid "Before SPO"
@@ -135,7 +135,7 @@ msgstr "Importation des conjoints"
 
 #: GeneanetForGramps.py:267
 msgid "Import all spouses of the selected person"
-msgstr "Importation de tous les conjoints de la personne sélectionnée"
+msgstr "Importation de tous les conjoints de l'individu sélectionné"
 
 #: GeneanetForGramps.py:271
 msgid "Before LVL"
@@ -172,7 +172,7 @@ msgstr "Force l'importation"
 
 #: GeneanetForGramps.py:288
 msgid "Force import of existing persons"
-msgstr "Force l'importation de personnes existantes"
+msgstr "Force l'importation d'individus existants"
 
 #: GeneanetForGramps.py:292
 msgid "Before VRB"
@@ -242,7 +242,7 @@ msgstr "Copy futée d'attributs"
 #: GeneanetForGramps.py:459
 #, python-format
 msgid "Copying Person attribute %s (former value %s newer value %s)"
-msgstr "Copie de l'attribut %s de la personne (valeur précédente %s nouvelle valeur %s)"
+msgstr "Copie de l'attribut %s de l'individu (valeur précédente : %s, nouvelle valeur : %s)"
 
 #: GeneanetForGramps.py:464
 #, python-format
@@ -465,24 +465,24 @@ msgstr "Arrêt de l'exploration pour la famille "
 
 #: GeneanetForGramps.py:1015
 msgid " as there are no more children"
-msgstr ""
+msgstr " car il n'y a plus d'enfants"
 
 #: GeneanetForGramps.py:1020
 msgid " as we reached level "
-msgstr ""
+msgstr " après atteinte du niveau "
 
 #: GeneanetForGramps.py:1029
 #, python-format
 msgid "Initialize Person at level %d"
-msgstr ""
+msgstr "Créé l'individu au niveau %d"
 
 #: GeneanetForGramps.py:1074
 msgid "Smart Copying Person"
-msgstr ""
+msgstr "Copie futée d'un individu"
 
 #: GeneanetForGramps.py:1099
 msgid "Purl:"
-msgstr ""
+msgstr "Purl :"
 
 #: GeneanetForGramps.py:1105
 msgid "Page considered:"
@@ -490,15 +490,15 @@ msgstr "Page considérée :"
 
 #: GeneanetForGramps.py:1108
 msgid "Return code:"
-msgstr ""
+msgstr "Code de retour :"
 
 #: GeneanetForGramps.py:1110
 msgid "We failed to reach the server at"
-msgstr ""
+msgstr "Impossible d'atteindre le serveur à"
 
 #: GeneanetForGramps.py:1116
 msgid "Unable to perform HTML analysis"
-msgstr ""
+msgstr "Impossible d'effectuer l'analyze HTML"
 
 #: GeneanetForGramps.py:1139
 #, python-format
@@ -519,35 +519,35 @@ msgstr "Décédé"
 
 #: GeneanetForGramps.py:1162 GeneanetForGramps.py:1506
 msgid "Birth:"
-msgstr "Naissance:"
+msgstr "Naissance :"
 
 #: GeneanetForGramps.py:1169
 msgid "Birth place:"
-msgstr "Lieu de naissance:"
+msgstr "Lieu de naissance :"
 
 #: GeneanetForGramps.py:1179
 msgid "Birth place code:"
-msgstr ""
+msgstr "Code du lieu de naissance"
 
 #: GeneanetForGramps.py:1185 GeneanetForGramps.py:1519
 msgid "Death:"
-msgstr ""
+msgstr "Décès :"
 
 #: GeneanetForGramps.py:1192
 msgid "Death place:"
-msgstr ""
+msgstr "Lieu de décès :"
 
 #: GeneanetForGramps.py:1202
 msgid "Death place code:"
-msgstr ""
+msgstr "Code du lieu de décès :"
 
 #: GeneanetForGramps.py:1214
 msgid "Spouse name:"
-msgstr ""
+msgstr "Nom du conjoint"
 
 #: GeneanetForGramps.py:1221
 msgid "Spouse ref:"
-msgstr ""
+msgstr "Référence du conjoint :"
 
 #: GeneanetForGramps.py:1233
 msgid "Married:"
@@ -564,53 +564,53 @@ msgstr "Code du lieu de mariage :"
 #: GeneanetForGramps.py:1261
 #, python-format
 msgid "Child %d name: %s"
-msgstr ""
+msgstr "Enfant %d nom : %s"
 
 #: GeneanetForGramps.py:1267
 #, python-format
 msgid "Child %d ref: %s"
-msgstr ""
+msgstr "Enfant %d référence : %s"
 
 #: GeneanetForGramps.py:1293
 #, python-format
 msgid "Parent name: %s (%s)"
-msgstr ""
+msgstr "Nom du parent : %s (%s)"
 
 #: GeneanetForGramps.py:1307
 msgid "We failed to be ok with the server"
-msgstr ""
+msgstr "Echec de l'entente avec le serveur"
 
 #: GeneanetForGramps.py:1320
 msgid "Create new Gramps Person: "
-msgstr ""
+msgstr "Création dun nouvel individu Gramps : "
 
 #: GeneanetForGramps.py:1332
 msgid "DEBUG: Looking after "
-msgstr ""
+msgstr "DEBUG: Recherche "
 
 #: GeneanetForGramps.py:1358
 msgid "DEBUG: firstname: "
-msgstr ""
+msgstr "DEBUG : prénom : "
 
 #: GeneanetForGramps.py:1358
 msgid " vs g_firstname: "
-msgstr ""
+msgstr " comparé au prénom Gramps : "
 
 #: GeneanetForGramps.py:1359
 msgid "DEBUG: lastname: "
-msgstr ""
+msgstr "DEBUG : nom : "
 
 #: GeneanetForGramps.py:1359
 msgid " vs g_lastname: "
-msgstr ""
+msgstr " comparé au nom Gramps : "
 
 #: GeneanetForGramps.py:1376
 msgid "DEBUG: bd: "
-msgstr ""
+msgstr "DEBUG : bd : "
 
 #: GeneanetForGramps.py:1376
 msgid " vs g_bd: "
-msgstr ""
+msgstr " comparé à g_bd : "
 
 #: GeneanetForGramps.py:1377
 msgid "DEBUG: dd: "
@@ -622,202 +622,202 @@ msgstr ""
 
 #: GeneanetForGramps.py:1390
 msgid "Found a Gramps Person: "
-msgstr ""
+msgstr "Individu Gramps trouvé : "
 
 #: GeneanetForGramps.py:1410
 msgid "ERROR: Unable sync unknown Gramps Person"
-msgstr ""
+msgstr "ERREUR : Synchronisation impossible, individu Gramps inconnu"
 
 #: GeneanetForGramps.py:1472
 #, python-format
 msgid "Existing Gramps Person: %s"
-msgstr ""
+msgstr "Individu Gramps existant : %s"
 
 #: GeneanetForGramps.py:1488
 msgid "Gender:"
-msgstr ""
+msgstr "Genre :"
 
 #: GeneanetForGramps.py:1500
 #, python-format
 msgid "===> Gramps Name of %s: %s %s"
-msgstr ""
+msgstr "===> Nom Gramps de %s : %s %s"
 
 #: GeneanetForGramps.py:1510
 msgid "No Birth date"
-msgstr ""
+msgstr "Pas de date de naissance"
 
 #: GeneanetForGramps.py:1513
 #, python-format
 msgid "WARNING: Unable to retrieve birth date for id %s"
-msgstr ""
+msgstr "ATTENTION : impossible de récupérer la date de naissance pour l'id %s"
 
 #: GeneanetForGramps.py:1523
 msgid "No Death date"
-msgstr ""
+msgstr "Pas de date de décès"
 
 #: GeneanetForGramps.py:1526
 #, python-format
 msgid "WARNING: Unable to retrieve death date for id %s"
-msgstr ""
+msgstr "ATTENTION : impossible de récupérer la date de décès pour l'id %s"
 
 #: GeneanetForGramps.py:1535 GeneanetForGramps.py:1539
 msgid "Family:"
-msgstr ""
+msgstr "Famille :"
 
 #: GeneanetForGramps.py:1545
 msgid "Father H:"
-msgstr ""
+msgstr "Lien du père :"
 
 #: GeneanetForGramps.py:1549
 msgid "Father name:"
-msgstr ""
+msgstr "Nom du père :"
 
 #: GeneanetForGramps.py:1556
 msgid "Mother H:"
-msgstr ""
+msgstr "Lien de la mère :"
 
 #: GeneanetForGramps.py:1560
 msgid "Mother name:"
-msgstr ""
+msgstr "Nom de la mère :"
 
 #: GeneanetForGramps.py:1565
 #, python-format
 msgid "NOTE: Unable to retrieve family for id %s"
-msgstr ""
+msgstr "NOTE: Impossible de trouver une famille d'id %s"
 
 #: GeneanetForGramps.py:1588
 msgid "=> Initialize Family of "
-msgstr ""
+msgstr "=> Création d'une famille de "
 
 #: GeneanetForGramps.py:1595
 msgid "Unable to Initialize Family of "
-msgstr ""
+msgstr "Impossible de créer une famille de "
 
 #: GeneanetForGramps.py:1595
 msgid " sex unknown"
-msgstr ""
+msgstr " sexe inconnu"
 
 #: GeneanetForGramps.py:1624
 msgid "=> Recursing on the parents of "
-msgstr ""
+msgstr "=> Récursivité sur les parents de "
 
 #: GeneanetForGramps.py:1628
 msgid "=> End of recursion on the parents of "
-msgstr ""
+msgstr "=> Fin de récursivité sur les parents de "
 
 #: GeneanetForGramps.py:1635
 msgid "=> Recursing on the mother of "
-msgstr ""
+msgstr "=> Récursivité sur la mère de "
 
 #: GeneanetForGramps.py:1639
 msgid "=> End of recursing on the mother of "
-msgstr ""
+msgstr "=> Fin de récursivité sur la mère de "
 
 #: GeneanetForGramps.py:1643
 msgid "=> Initialize Parents Family of "
-msgstr ""
+msgstr "Création de la famille des parents de "
 
 #: GeneanetForGramps.py:1684
 msgid "Stopping exploration as we reached level "
-msgstr ""
+msgstr "Arrêt de l'exploration, en raison de l'atteinte du niveau "
 
 #: GeneanetForGramps.py:1687
 msgid "Stopping exploration as there are no more parents"
-msgstr ""
+msgstr "Arrêt de l'exploration, car il n'y a plus de parents"
 
 #: GeneanetForGramps.py:1709
 #, python-format
 msgid "Gramps   person: %s %s"
-msgstr ""
+msgstr "Individu Gramps   : %s %s"
 
 #: GeneanetForGramps.py:1710
 #, python-format
 msgid "Geneanet person: %s %s"
-msgstr ""
+msgstr "Individu Geneanet : %s %s"
 
 #: GeneanetForGramps.py:1713 GeneanetForGramps.py:1734
 msgid "Do not continue without force"
-msgstr ""
+msgstr "Impossible de continuer sans forcer l'importation"
 
 #: GeneanetForGramps.py:1730
 #, python-format
 msgid "Gramps   person birth/death: %s / %s"
-msgstr ""
+msgstr "Individu Gramps    naissance/décès : %s / %s"
 
 #: GeneanetForGramps.py:1731
 #, python-format
 msgid "Geneanet person birth/death: %s / %s"
-msgstr ""
+msgstr "Individu Geneanets naissance/décès : %s / %s"
 
 #: GeneanetForGramps.py:1741
 #, python-format
 msgid "Adding Gramps person %s %s (%s-%s)"
-msgstr "Ajout de l'individu Gramps  %s %s (%s-%s)"
+msgstr "Ajout de l'individu Gramps %s %s (%s-%s)"
 
 #: GeneanetForGramps.py:1781
 msgid "Import Geneanet subtrees into Gramps"
-msgstr ""
+msgstr "Importation des sous-arbres Genanet dans Gramps"
 
 #: GeneanetForGramps.py:1782
 msgid "Increase verbosity"
-msgstr ""
+msgstr "Augmenter la verbosité"
 
 #: GeneanetForGramps.py:1783
 msgid "Includes ascendants (off by default)"
-msgstr ""
+msgstr "Inclure les ascendants (désactivé par défaut)"
 
 #: GeneanetForGramps.py:1784
 msgid "Includes descendants (off by default)"
-msgstr ""
+msgstr "Inclure les descendants (désactivé par défaut)"
 
 #: GeneanetForGramps.py:1785
 msgid "Includes all spouses (off by default)"
-msgstr ""
+msgstr "Inclure les conjoints (désactivé par défaut)"
 
 #: GeneanetForGramps.py:1786
 msgid "Number of level to explore (2 by default)"
-msgstr ""
+msgstr "Nombre de niveaux à explorer (2 par défaut)"
 
 #: GeneanetForGramps.py:1787
 msgid "Full path of the Gramps database (under $HOME/.gramps/grampsdb)"
-msgstr ""
+msgstr "Chemin complet de la base de données Gramps (sous $HOME/.gramps/grampsdb)"
 
 #: GeneanetForGramps.py:1788
 msgid "ID of the person to start from in Gramps"
-msgstr ""
+msgstr "Id de l'individu de départ dans Gramps"
 
 #: GeneanetForGramps.py:1789
 msgid "Force processing"
-msgstr ""
+msgstr "Forcer le traitement"
 
 #: GeneanetForGramps.py:1790
 msgid "Url of the person to search in Geneanet"
-msgstr ""
+msgstr "URL de l'individu à rechercher sur Geneanet"
 
 #: GeneanetForGramps.py:1796
 msgid "Please provide a person to search for"
-msgstr ""
+msgstr "Merci de fournir un individu à rechercher"
 
 #: GeneanetForGramps.py:1814
 msgid "Please provide a grampsfile to search into"
-msgstr ""
+msgstr "Merci de fournir une base Gramps pour la recherche"
 
 #: GeneanetForGramps.py:1822
 #, python-format
 msgid "Opening the '%s' database"
-msgstr ""
+msgstr "Ouverture de la base de données '%s'"
 
 #: GeneanetForGramps.py:1823
 msgid "An attempt to convert the database failed. Perhaps it needs updating."
-msgstr ""
+msgstr "Une tentative de convertir la base de données a échoué. Peut-être a-t-elle besoin d'une mise à jour."
 
 #: GeneanetForGramps.py:1835
 msgid "DEBUG: existing gramps id:"
-msgstr ""
+msgstr "DEBUG : Id Gramps existant :"
 
 #: GeneanetForGramps.py:1838
 msgid "WARNING: Force mode activated"
-msgstr ""
+msgstr "ATTENTION : Mode forcé activé"
 
 #: GeneanetForGramps.gpr.py:22
 msgid "Import Geneanet data for Gramps"
