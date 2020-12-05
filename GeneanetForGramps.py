@@ -132,7 +132,7 @@ def format_ca(date):
     """
     # If ca for an about date, replace with vers (for now)
     if date[0:2] == "ca":
-        date = "vers"+date[2:]
+        date = _("about")+date[2:]
     return(date)
 
 def format_year(date):
@@ -189,10 +189,12 @@ def convert_date(datetab):
         # avoid a potential , after the year
         elif datetab[1].isnumeric():
             return(datetab[1][0:4])
-    if (datetab[0][0:2] == 've' or datetab[0][0:2] == 'ap' or datetab[0][0:2] == 'av') and (len(datetab) == 2):
+    if (datetab[0][0:2] == _("about")[0:2] or datetab[0][0:2] ==  _("after")[0:2] or datetab[0][0:2] ==  _("before")[0:2]) and (len(datetab) == 2):
         return(datetab[0]+" "+datetab[1][0:4])
+    # In case of french language remove the 'le' prefix
     if datetab[0] == 'le':
         idx = 1
+    # In case of french language remove the 'er' prefix
     if datetab[idx] == "1er":
         datetab[idx] = "1"
     bd1 = datetab[idx]+" "+datetab[idx+1]+" "+datetab[idx+2][0:4]
@@ -411,18 +413,18 @@ class GBase:
             if (self.__dict__[attr] == 'F' and self.__dict__['g_'+attr] == 'M') \
             or (self.__dict__[attr] == 'M' and self.__dict__['g_'+attr] == 'F'):
                 if verbosity >= 1:
-                    print(_("WARNING: Gender conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps (")+self.__dict__[attr]+_("), keeping Gramps value"))
+                    print(_("WARNING: Gender conflict between Geneanet (%s) and Gramps (%s), keeping Gramps value")%(self.__dict__['g_'+attr],self.__dict__[attr]))
                 scopy = False
 
         if attr == 'lastname' and self.__dict__[attr] != self.__dict__['g_'+attr]:
             if verbosity >= 1 and self.__dict__[attr] != "":
-                print(_("WARNING: Lastname conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps ()"+self.__dict__[attr]+_("), keeping Gramps value"))
+                print(_("WARNING: Lastname conflict between Geneanet (%s) and Gramps (%s), keeping Gramps value")%(self.__dict__['g_'+attr],self.__dict__[attr]))
         if attr == 'lastname' and self.__dict__[attr] == "":
             scopy = True
 
         if attr == 'firstname' and self.__dict__[attr] != self.__dict__['g_'+attr]:
             if verbosity >= 1 and self.__dict__[attr] != "":
-                print(_("WARNING: Firstname conflict between Geneanet (")+self.__dict__['g_'+attr]+_(") and Gramps (")+self.__dict__[attr]+_("), keeping Gramps value"))
+                print(_("WARNING: Firstname conflict between Geneanet (%s) and Gramps (%s), keeping Gramps value")%(self.__dict__['g_'+attr],self.__dict__[attr]))
         if attr == 'firstname' and self.__dict__[attr] == "":
             scopy = True
 
@@ -571,16 +573,17 @@ class GBase:
             if self.__dict__[attr+'date']:
                 idx = 0
                 mod = Date.MOD_NONE
-                if self.__dict__[attr+'date'][0:2] == 've':
+                if self.__dict__[attr+'date'][0:2] == _("about")[0:2]:
                     idx = 1
                     mod = Date.MOD_ABOUT 
-                elif self.__dict__[attr+'date'][0:2] == 'av':
+                elif self.__dict__[attr+'date'][0:2] == _("before")[0:2]:
                     idx = 1
                     mod = Date.MOD_BEFORE 
-                elif self.__dict__[attr+'date'][0:2] == 'ap':
+                elif self.__dict__[attr+'date'][0:2] == _("after")[0:2]:
                     idx = 1
                     mod = Date.MOD_AFTER 
-                elif self.__dict__[attr+'date'][0:2] == 'en':
+                # Only in case of french language analysis
+                elif self.__dict__[attr+'date'][0:2] == _("in")[0:2]:
                     idx = 1
                 else:
                     pass
@@ -668,7 +671,7 @@ class GBase:
                 return(None)
             if event:
                 if verbosity >= 4:
-                    print(_("Event:"),event)
+                    print(_("Event")+":",event)
                 date = event.get_date_object()
                 moddate = date.get_modifier()
                 tab = date.get_dmy()
@@ -682,11 +685,11 @@ class GBase:
                 else:
                     ret = format_noniso(tab)
                 if moddate == Date.MOD_BEFORE:
-                    pref = "avant "
+                    pref = _("before")+" "
                 elif moddate == Date.MOD_AFTER:
-                    pref = "après "
+                    pref = _("after")+" "
                 elif moddate == Date.MOD_ABOUT:
-                    pref = "vers "
+                    pref = _("about")+" "
                 else:
                     pref = ""
                 if verbosity >= 3:
@@ -1120,6 +1123,9 @@ class GPerson(GBase):
                     # Should return M or F
                     sex = tree.xpath('//div[@id="person-title"]//img/attribute::alt')
                     self.g_sex = sex[0]
+                    # Seems we have a french codification on the site
+                    if sex[0] == 'H':
+                        self.g_sex = 'M'
                 except:
                     self.g_sex = 'U'
                 try:
@@ -1134,13 +1140,23 @@ class GPerson(GBase):
                 if verbosity >= 2:
                     print(_("Sex:"), self.g_sex)
                 try:
-                    birth = tree.xpath('//li[contains(., "Né")]/text()')
+                    sstring = '//li[contains(., "'+_("Born")+'")]/text()'
+                    if verbosity >= 3:
+                        print("sstring: "+sstring)
+                    birth = tree.xpath(sstring)
                 except:
                     birth = [""]
+                if verbosity >= 3:
+                    print(_("birth")+": %s"%(birth))
                 try:
-                    death = tree.xpath('//li[contains(., "Décédé")]/text()')
+                    sstring = '//li[contains(., "'+_("Deceased")+'")]/text()'
+                    if verbosity >= 3:
+                        print("sstring: "+sstring)
+                    death = tree.xpath(sstring)
                 except:
                     death = [""]
+                if verbosity >= 3:
+                    print(_("death")+": %s"%(death))
                 try:
                     # sometime parents are using circle, somtimes disc !
                     parents = tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//li[@style="vertical-align:middle;list-style-type:disc" or @style="vertical-align:middle;list-style-type:circle"]')
@@ -1727,12 +1743,13 @@ def geneanet_to_gramps(p, level, gid, url):
                 db.close()
                 sys.exit(_("Do not continue without force"))
             else:
+                print(_("Please fix the person in gramps"))
                 return(None)
 
     # Copy from Geneanet into Gramps and commit
     p.to_gramps()
     if GUIMODE:
-        progress.set_header(_("Adding Gramps person %s %s (%s-%s)")%(p.firstname,p.lastname,p.birthdate,p.deathdate))
+        progress.set_header(_("Adding Gramps Person %s %s (%s | %s)")%(p.firstname,p.lastname,p.birthdate,p.deathdate))
         progress.step()
     return(p)
 
