@@ -919,11 +919,3 @@ msgstr "DEBUG : Id Gramps existant :"
 #: GeneanetForGramps/GeneanetForGramps.py:1849
 msgid "WARNING: Force mode activated"
 msgstr "ATTENTION : Mode forcé activé"
-
-#: GeneanetForGramps/GeneanetForGramps.gpr.py:22
-msgid "Import Geneanet data for Gramps"
-msgstr "Import des données Geneanet dans Gramps"
-
-#: GeneanetForGramps/GeneanetForGramps.gpr.py:24
-msgid "Extension to import data from Geneanet into Gramps."
-msgstr "Extension pour importer les données de Geneanet dans Gramps"
