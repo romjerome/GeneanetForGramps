@@ -544,7 +544,7 @@ class GBase:
             event = Event()
             uptype = getattr(EventType,attr.upper())
             event.set_type(EventType(uptype))
-            event.set_description(str(self.title))
+            event.set_description(self.title[0])
             db.add_event(event,tran)
 
             eventref = EventRef()
@@ -1449,7 +1449,7 @@ class GPerson(GBase):
                         found = True
                 if not found:
                     url = Url()
-                    url.set_description(str(self.title))
+                    url.set_description(self.title[0])
                     url.set_type(UrlType.WEB_HOME)
                     url.set_path(self.url)
                     grampsp.add_url(url)
