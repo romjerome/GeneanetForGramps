@@ -544,7 +544,7 @@ class GBase:
             event = Event()
             uptype = getattr(EventType,attr.upper())
             event.set_type(EventType(uptype))
-            event.set_description('Imported from Geaneanet')
+            event.set_description(str(self.title))
             db.add_event(event,tran)
 
             eventref = EventRef()
@@ -716,6 +716,7 @@ class GFamily(GBase):
         # Pointer to the Gramps Family instance
         self.family = None
         # Geneanet properties
+        self.title = ""
         self.g_marriagedate = None
         self.g_marriageplace = None
         self.g_marriageplacecode = None
@@ -1116,6 +1117,7 @@ class GPerson(GBase):
                     print(_("Unable to perform HTML analysis"))
 
                 self.url = purl
+                self.title = tree.xpath('//title/text()')
                 # Wait after a Genanet request to be fair with the site
                 # between 2 and 7 seconds
                 time.sleep(random.randint(2,7))
@@ -1447,7 +1449,7 @@ class GPerson(GBase):
                         found = True
                 if not found:
                     url = Url()
-                    url.set_description("Imported from Geneanet")
+                    url.set_description(str(self.title))
                     url.set_type(UrlType.WEB_HOME)
                     url.set_path(self.url)
                     grampsp.add_url(url)
