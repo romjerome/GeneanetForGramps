@@ -1228,14 +1228,16 @@ class GPerson(GBase):
                         if verbosity >= 2:
                             print(_("Spouse name:"), sname[s])
                     except:
-                        sname.append("")
+                        from uuid import uuid4
+                        sname.append(str(uuid4()))
 
                     try:
                         sref.append(str(spouse.xpath('a/attribute::href')[0]))
                         if verbosity >= 2:
                             print(_("Spouse ref:"), ROOTURL+sref[s])
                     except:
-                        sref.append("")
+                        from uuid import uuid4
+                        sname.append(str(uuid4()))
                     self.spouseref.append(ROOTURL+sref[s])
 
                     try:
