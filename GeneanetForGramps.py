@@ -792,6 +792,9 @@ class GFamily(GBase):
                 and self.mother and mother and mother.gramps_id == self.mother.gid:
                 return(f)
             #TODO: What about preexisting families not created in this run ?
+            else:
+                print(i)
+                return(f)
         return(None)
 
     def from_geneanet(self):
