@@ -36,6 +36,7 @@ from lxml import html
 import requests
 import argparse
 from datetime import datetime
+from uuid import uuid3
 
 #------------------------------------------------------------------------
 #
@@ -1231,16 +1232,13 @@ class GPerson(GBase):
                         if verbosity >= 2:
                             print(_("Spouse name:"), sname[s])
                     except:
-                        from uuid import uuid4
-                        sname.append(str(uuid4()))
-
+                        sname.append(str(uuid3(self.url)))
                     try:
                         sref.append(str(spouse.xpath('a/attribute::href')[0]))
                         if verbosity >= 2:
                             print(_("Spouse ref:"), ROOTURL+sref[s])
                     except:
-                        from uuid import uuid4
-                        sname.append(str(uuid4()))
+                        sname.append(str(uuid3(self.url)))
                     self.spouseref.append(ROOTURL+sref[s])
 
                     try:
