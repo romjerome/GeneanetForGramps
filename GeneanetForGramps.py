@@ -36,7 +36,6 @@ from lxml import html
 import requests
 import argparse
 from datetime import datetime
-import uuid
 
 #------------------------------------------------------------------------
 #
@@ -469,6 +468,7 @@ class GBase:
         '''
         Create Place for Events or get an existing one based on the name
         '''
+
         try:
             pl = event.get_place_handle()
         except:
@@ -545,10 +545,7 @@ class GBase:
             event = Event()
             uptype = getattr(EventType,attr.upper())
             event.set_type(EventType(uptype))
-            if self.title == "": #TODO family event
-                event.set_description('Geneanet')
-            else:
-                event.set_description(str(self.title[0]))
+            event.set_description('Imported from Geaneanet')
             db.add_event(event,tran)
 
             eventref = EventRef()
@@ -720,7 +717,6 @@ class GFamily(GBase):
         # Pointer to the Gramps Family instance
         self.family = None
         # Geneanet properties
-        self.title = ""
         self.g_marriagedate = None
         self.g_marriageplace = None
         self.g_marriageplacecode = None
@@ -793,9 +789,6 @@ class GFamily(GBase):
                 and self.mother and mother and mother.gramps_id == self.mother.gid:
                 return(f)
             #TODO: What about preexisting families not created in this run ?
-            else:
-                print(i)
-                return(f)
         return(None)
 
     def from_geneanet(self):
@@ -1119,12 +1112,11 @@ class GPerson(GBase):
         else:
             if page.ok:
                 try:
-                    tree = html.fromstring(page.content)
+                    tree = html.fromstring(str(page.content))
                 except:
                     print(_("Unable to perform HTML analysis"))
 
                 self.url = purl
-                self.title = tree.xpath('//title/text()')
                 # Wait after a Genanet request to be fair with the site
                 # between 2 and 7 seconds
                 time.sleep(random.randint(2,7))
@@ -1139,8 +1131,8 @@ class GPerson(GBase):
                     self.g_sex = 'U'
                 try:
                     name = tree.xpath('//div[@id="person-title"]//a/text()')
-                    self.g_firstname = str(name[0])
-                    self.g_lastname = str(name[1])
+                    self.g_firstname = str(name[0]).title()
+                    self.g_lastname = str(name[1]).title()
                 except:
                     self.g_firstname = ""
                     self.g_lastname = ""
@@ -1167,7 +1159,7 @@ class GPerson(GBase):
                 if verbosity >= 3:
                     print(_("death")+": %s"%(death))
                 try:
-                    # sometime parents are using circle, somtimes disc !
+                    # sometime parents are using circle, sometimes disc !
                     parents = tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//li[@style="vertical-align:middle;list-style-type:disc" or @style="vertical-align:middle;list-style-type:circle"]')
                 except:
                     parents = []
@@ -1183,7 +1175,7 @@ class GPerson(GBase):
                 except:
                     self.g_birthdate = None
                 try:
-                    self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip())
+                    self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip()).title()
                     if verbosity >= 2:
                         print(_("Birth place:"), self.g_birthplace)
                 except:
@@ -1206,7 +1198,7 @@ class GPerson(GBase):
                 except:
                     self.g_deathdate = None
                 try:
-                    self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip()
+                    self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip().title()
                     if verbosity >= 2:
                         print(_("Death place:"), self.g_deathplace)
                 except:
@@ -1227,20 +1219,22 @@ class GPerson(GBase):
                 sref = []
                 marriage = []
                 for spouse in spouses:
-                    print(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
-                    try:
-                        sname.append(str(spouse.xpath('a/text()')[0]))
-                        if verbosity >= 2:
-                            print(_("Spouse name:"), sname[s])
-                    except:
-                        sname.append(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
-                    try:
-                        sref.append(str(spouse.xpath('a/attribute::href')[0]))
-                        if verbosity >= 2:
-                            print(_("Spouse ref:"), ROOTURL+sref[s])
-                    except:
-                        sname.append(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
-                    print(sname)
+                    for a in spouse.xpath('a'):
+                        sosa = a.find('img')
+                        if sosa is None:
+                            try:
+                                sname.append(str(a.xpath('text()')[0]).title())
+                                if verbosity >= 2:
+                                    print(_("Spouse name:"), sname[s])
+                            except:
+                                sname.append("")
+                            try:
+                                sref.append(str(a.xpath('attribute::href')[0]))
+                                if verbosity >= 2:
+                                    print(_("Spouse ref:"), ROOTURL+sref[s])
+                            except:
+                                sref.append("")
+
                     self.spouseref.append(ROOTURL+sref[s])
 
                     try:
@@ -1255,7 +1249,7 @@ class GPerson(GBase):
                     except:
                         self.marriagedate.append(None)
                     try:
-                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]))
+                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]).title())
                         if verbosity >= 2:
                             print(_("Married place:"), self.marriageplace[s])
                     except:
@@ -1275,18 +1269,22 @@ class GPerson(GBase):
                     cnum = 0
                     clist = []
                     for c in spouse.xpath('ul/li'):
-                        try:
-                            cname = c.xpath('a/text()')[0]
-                            if verbosity >= 2:
-                                print(_("Child %d name: %s")%(cnum,cname))
-                        except:
-                            cname = None
-                        try:
-                            cref = ROOTURL+str(c.xpath('a/attribute::href')[0])
-                            if verbosity >= 2:
-                                print(_("Child %d ref: %s")%(cnum,cref))
-                        except:
-                            cref = None
+                        for a in c.xpath('a'):
+                            sosa = a.find('img')
+                            if sosa is None:
+                                try:
+                                    cname = c.xpath('a/text()')[0].title()
+                                    if verbosity >= 2:
+                                        print(_("Child %d name: %s")%(cnum,cname))
+                                except:
+                                    cname = ""
+                                try:
+                                    cref = ROOTURL+str(a.xpath('attribute::href')[0])
+                                    if verbosity >= 2:
+                                        print(_("Child %d ref: %s")%(cnum,cref))
+                                except:
+                                    cref = None
+
                         clist.append(cref)
                         cnum = cnum + 1
                     self.childref.append(clist)
@@ -1300,15 +1298,19 @@ class GPerson(GBase):
                     if verbosity >= 3:
                         print(p.xpath('text()'))
                     if p.xpath('text()')[0] == '\n':
-                        try:
-                            pname = p.xpath('a/text()')[0]
-                        except:
-                            pname = ""
-                            # if pname is ? ? then go to next one
-                        try:
-                            pref = p.xpath('a/attribute::href')[0]
-                        except:
-                            pref = ""
+                        for a in p.xpath('a'):
+                            sosa = a.find('img')
+                            if sosa is None:
+                                try:
+                                    pname = a.xpath('text()')[0].title()
+                                except:
+                                    pname = ""
+                                    # if pname is ? ? then go to next one
+                                try:
+                                    pref = a.xpath('attribute::href')[0]
+                                except:
+                                    pref = ""
+
                         if verbosity >= 1:
                            print(_("Parent name: %s (%s)")%(pname,ROOTURL+pref))
                         prefl.append(ROOTURL+str(pref))
@@ -1457,7 +1459,7 @@ class GPerson(GBase):
                         found = True
                 if not found:
                     url = Url()
-                    url.set_description(str(self.title[0]))
+                    url.set_description("Imported from Geneanet")
                     url.set_type(UrlType.WEB_HOME)
                     url.set_path(self.url)
                     grampsp.add_url(url)
@@ -1826,7 +1828,7 @@ def main():
     descendants = args.descendants
     spouses = args.spouses
     LEVEL = args.level
-	
+
     # TODO: do a backup before opening and remove fixed path
     if gname == None:
         #gname = "Test import"
@@ -1844,7 +1846,7 @@ def main():
                     _("An attempt to convert the database failed. "
                       "Perhaps it needs updating."), parent=self.top)
         sys.exit(-1)
-    	
+
     gid = args.id
     if gid == None:
         gid = "0000"
@@ -1867,3 +1869,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
