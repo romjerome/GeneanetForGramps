@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2020 Bruno Cornec
+# Copyright (C) 2021 Bruno Cornec
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ register(TOOL,
     name  = _("Import Geneanet data for Gramps"),
     #name_accell  = _("Geneanet for Gramps"),
     description =  _("Extension to import data from Geneanet into Gramps."),
-    version = '1.0.0',
+    version = '1.1.0',
     gramps_target_version = '5.1',
     status = STABLE,
     fname = 'GeneanetForGramps.py',
