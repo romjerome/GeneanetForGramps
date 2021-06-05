@@ -493,7 +493,7 @@ class GBase:
                 pl = db.get_place_from_handle(handle)
                 explace = pl.get_name().value
                 if verbosity >= 4:
-                    print(_("DEBUG: search for ")+str(placename)+_(" in ")+str(explace))
+                    LOG.debug((("search for "), str(placename),str(explace)))
                 if str(explace) == str(placename):
                     keep = pl
                     break
@@ -1110,6 +1110,7 @@ class GPerson(GBase):
                 print("-----------------------------------------------------------")
                 print(_("Page considered:"),purl)
             page = requests.get(purl)
+            LOG.info(page)
             if verbosity >= 3:
                 print(_("Return code:"),page.status_code)
         except:
@@ -1121,8 +1122,15 @@ class GPerson(GBase):
                 except:
                     print(_("Unable to perform HTML analysis"))
 
+                LOG.info(str(page.content))
+                from lxml import etree                
+                find_text = etree.XPath("//text()", smart_strings=False)
+                LOG.debug(find_text(tree))
+                LOG.debug((etree.tostring(tree, method='xml', pretty_print=True)))
+
                 self.url = purl
                 self.title = tree.xpath('//title/text()')
+                LOG.debug((purl, self.title))
                 # Wait after a Genanet request to be fair with the site
                 # between 2 and 7 seconds
                 time.sleep(random.randint(2,7))
