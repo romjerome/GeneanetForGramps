@@ -36,6 +36,7 @@ from lxml import html
 import requests
 import argparse
 from datetime import datetime
+import uuid
 
 #------------------------------------------------------------------------
 #
@@ -545,7 +546,10 @@ class GBase:
             event = Event()
             uptype = getattr(EventType,attr.upper())
             event.set_type(EventType(uptype))
-            event.set_description('Imported from Geaneanet')
+            try:
+                event.set_description(str(self.title[0]))
+            except:
+                event.set_description(_("No title"))
             db.add_event(event,tran)
 
             eventref = EventRef()
@@ -584,7 +588,7 @@ class GBase:
                     idx = 1
                     mod = Date.MOD_AFTER
                 # Only in case of french language analysis
-                elif self.__dict__[attr+'date'][0:2] == _("in")[0:2]:
+                elif self.__dict__[attr+'date'][0:2] == "en"[0:2]:
                     idx = 1
                 else:
                     pass
@@ -710,6 +714,7 @@ class GFamily(GBase):
         # The 2 GPersons parents in this family should exist
         # and properties filled before we create the family
         # Gramps properties
+        self.title = ""
         self.marriagedate = None
         self.marriageplace = None
         self.marriageplacecode = None
@@ -1117,6 +1122,7 @@ class GPerson(GBase):
                     print(_("Unable to perform HTML analysis"))
 
                 self.url = purl
+                self.title = tree.xpath('//title/text()')
                 # Wait after a Genanet request to be fair with the site
                 # between 2 and 7 seconds
                 time.sleep(random.randint(2,7))
@@ -1134,7 +1140,7 @@ class GPerson(GBase):
                     self.g_firstname = str(name[0]).title()
                     self.g_lastname = str(name[1]).title()
                 except:
-                    self.g_firstname = ""
+                    self.g_firstname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                     self.g_lastname = ""
                 if verbosity >= 1:
                     print(_("==> GENEANET Name (L%d): %s %s")%(self.level,self.g_firstname,self.g_lastname))
@@ -1179,17 +1185,17 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("Birth place:"), self.g_birthplace)
                 except:
-                    self.g_birthplace = None
+                    self.g_birthplace = _("Place Exception")
                 try:
                     self.g_birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_birthplacecode)
                     if not match:
-                        self.g_birthplacecode = None
+                        self.g_birthplacecode = _("not match")
                     else:
                         if verbosity >= 2:
                             print(_("Birth place code:"), self.g_birthplacecode)
                 except:
-                    self.g_birthplacecode = None
+                    self.g_birthplacecode = _("Exception")
                 try:
                     ld = convert_date(death[0].split('-')[0].split()[1:])
                     if verbosity >= 2:
@@ -1202,17 +1208,17 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("Death place:"), self.g_deathplace)
                 except:
-                    self.g_deathplace = None
+                    self.g_deathplace = _("Place Exception")
                 try:
                     self.g_deathplacecode = str(' '.join(death[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_deathplacecode)
                     if not match:
-                        self.g_deathplacecode = None
+                        self.g_deathplacecode = _("not match")
                     else:
                         if verbosity >= 2:
                             print(_("Death place code:"), self.g_deathplacecode)
                 except:
-                    self.g_deathplacecode = None
+                    self.g_deathplacecode = _("Exception")
 
                 s = 0
                 sname = []
@@ -1253,18 +1259,18 @@ class GPerson(GBase):
                         if verbosity >= 2:
                             print(_("Married place:"), self.marriageplace[s])
                     except:
-                        self.marriageplace.append(None)
+                        self.marriageplace.append(str(marriage[s]))
                     try:
                         marriageplacecode = str(marriage[s].split(',')[2][1:])
                         match = re.search(r'\d\d\d\d\d', marriageplacecode)
                         if not match:
-                            self.marriageplacecode.append(None)
+                            self.marriageplacecode.append(str(marriage[s]))
                         else:
                             if verbosity >= 2:
                                 print(_("Married place code:"), self.marriageplacecode[s])
                             self.marriageplacecode.append(marriageplacecode)
                     except:
-                        self.marriageplacecode.append(None)
+                        self.marriageplacecode.append(str(marriage[s]))
 
                     cnum = 0
                     clist = []
@@ -1459,7 +1465,10 @@ class GPerson(GBase):
                         found = True
                 if not found:
                     url = Url()
-                    url.set_description("Imported from Geneanet")
+                    try:
+                        url.set_description(str(self.title[0]))
+                    except:
+                        url.set_description(_("Geneanet"))
                     url.set_type(UrlType.WEB_HOME)
                     url.set_path(self.url)
                     grampsp.add_url(url)
