@@ -1099,7 +1099,7 @@ class GPerson(GBase):
 
         # Needed as Geneanet returned relative links
 
-        # 
+        # https://edmundmartin.com
         from random import choice
  
         desktop_agents = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
