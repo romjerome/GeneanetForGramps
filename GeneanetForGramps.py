@@ -1159,12 +1159,14 @@ class GPerson(GBase):
                     if sex[0] == 'H':
                         self.g_sex = 'M'
                 except:
+                    LOG.debug(self.g_sex)
                     self.g_sex = 'U'
                 try:
                     name = tree.xpath('//div[@id="person-title"]//a/text()')
                     self.g_firstname = str(name[0]).title()
                     self.g_lastname = str(name[1]).title()
                 except:
+                    LOG.debug(str(name))
                     self.g_firstname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                     self.g_lastname = ""
                 if verbosity >= 1:
@@ -1172,20 +1174,22 @@ class GPerson(GBase):
                 if verbosity >= 2:
                     print(_("Sex:"), self.g_sex)
                 try:
-                    sstring = '//li[contains(., "'+_("Born")+'")]/text()'
+                    bstring = '//li[contains(., "'+_("Born")+'")]/text()'
                     if verbosity >= 3:
-                        print("sstring: "+sstring)
-                    birth = tree.xpath(sstring)
+                        print("bstring: "+bstring)
+                    birth = tree.xpath(bstring)
                 except:
+                    LOG.debug(birth)
                     birth = [""]
                 if verbosity >= 3:
                     print(_("birth")+": %s"%(birth))
                 try:
-                    sstring = '//li[contains(., "'+_("Deceased")+'")]/text()'
+                    dstring = '//li[contains(., "'+_("Deceased")+'")]/text()'
                     if verbosity >= 3:
-                        print("sstring: "+sstring)
-                    death = tree.xpath(sstring)
+                        print("dstring: "+dstring)
+                    death = tree.xpath(dstring)
                 except:
+                    LOG.debug(death)
                     death = [""]
                 if verbosity >= 3:
                     print(_("death")+": %s"%(death))
@@ -1204,13 +1208,14 @@ class GPerson(GBase):
                         print(_("Birth:"), ld)
                     self.g_birthdate = format_ca(ld)
                 except:
+                    LOG.debug(birth)
                     self.g_birthdate = None
                 try:
                     self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip()).title()
                     if verbosity >= 2:
                         print(_("Birth place:"), self.g_birthplace)
                 except:
-                    self.g_birthplace = _("Place Exception")
+                    self.g_birthplace = str(uuid.uuid3(uuid.NAMESPACE_URL, str(birth)))
                 try:
                     self.g_birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_birthplacecode)
@@ -1220,20 +1225,21 @@ class GPerson(GBase):
                         if verbosity >= 2:
                             print(_("Birth place code:"), self.g_birthplacecode)
                 except:
-                    self.g_birthplacecode = _("Exception")
+                    self.g_birthplacecode = None
                 try:
                     ld = convert_date(death[0].split('-')[0].split()[1:])
                     if verbosity >= 2:
                         print(_("Death:"), ld)
                     self.g_deathdate = format_ca(ld)
                 except:
+                    LOG.debug(death)
                     self.g_deathdate = None
                 try:
                     self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip().title()
                     if verbosity >= 2:
                         print(_("Death place:"), self.g_deathplace)
                 except:
-                    self.g_deathplace = _("Place Exception")
+                    self.g_deathplace = str(uuid.uuid3(uuid.NAMESPACE_URL, str(death)))
                 try:
                     self.g_deathplacecode = str(' '.join(death[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_deathplacecode)
@@ -1243,7 +1249,7 @@ class GPerson(GBase):
                         if verbosity >= 2:
                             print(_("Death place code:"), self.g_deathplacecode)
                 except:
-                    self.g_deathplacecode = _("Exception")
+                    self.g_deathplacecode = None
 
                 s = 0
                 sname = []
@@ -1641,7 +1647,7 @@ class GPerson(GBase):
                     spouse.spouse.append(self)
                     # Create a GFamily with them and do a Geaneanet to Gramps for it
                     if verbosity >= 2:
-                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" & "+spouse.firstname+" "+spouse.lastname)
+                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + "&" + "+spouse.firstname+" "+spouse.lastname)
                 if self.sex == 'M':
                     f = GFamily(self,spouse)
                 elif self.sex == 'F':
