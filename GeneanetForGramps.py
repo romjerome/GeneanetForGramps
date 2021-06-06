@@ -590,7 +590,7 @@ class GBase:
                     idx = 1
                     mod = Date.MOD_AFTER
                 # Only in case of french language analysis
-                elif self.__dict__[attr+'date'][0:2] == "en"[0:2]:
+                elif self.__dict__[attr+'date'][0:2] == _("in")[0:2]:
                     idx = 1
                 else:
                     pass
@@ -1154,10 +1154,10 @@ class GPerson(GBase):
                     tree = html.fromstring(page.read())
                     LOG.info(str(page))
 
-                from lxml import etree                
-                find_text = etree.XPath("//text()", smart_strings=False)
-                LOG.debug(find_text(tree))
-                LOG.debug((etree.tostring(tree, method='xml', pretty_print=True)))
+                #from lxml import etree                
+                #find_text = etree.XPath("//text()", smart_strings=False)
+                #LOG.debug(find_text(tree))
+                #LOG.debug((etree.tostring(tree, method='xml', pretty_print=True)))
 
                 self.url = purl
                 self.title = tree.xpath('//title/text()')
@@ -1222,7 +1222,7 @@ class GPerson(GBase):
                         print(_("Birth:"), ld)
                     self.g_birthdate = format_ca(ld)
                 except:
-                    LOG.debug(birth)
+                    LOG.debug('birth %s' % birth)
                     self.g_birthdate = None
                 try:
                     self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip()).title()
@@ -1246,7 +1246,7 @@ class GPerson(GBase):
                         print(_("Death:"), ld)
                     self.g_deathdate = format_ca(ld)
                 except:
-                    LOG.debug(death)
+                    LOG.debug('death %s' % death)
                     self.g_deathdate = None
                 try:
                     self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip().title()
