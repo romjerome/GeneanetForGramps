@@ -76,6 +76,9 @@ from gramps.gui.utils import ProgressMeter
 
 LOG = logging.getLogger("GeneanetForGramps")
 
+handler = logging.FileHandler('info.log')
+LOG.addHandler(handler)
+
 TIMEOUT = 5
 
 # TODO: Is it useful ?
@@ -1126,8 +1129,15 @@ class GPerson(GBase):
             if verbosity >= 1:
                 print("-----------------------------------------------------------")
                 print(_("Page considered:"),purl)
-            page = requests.get(purl)
-            LOG.info(page)
+            s = requests.session()
+            s.auth = ('user', 'pass')
+            header = s.head(purl)
+            LOG.info('header %s' % header)
+            page = s.get(purl)
+            LOG.info('content %s' % page.content)
+            LOG.info('text %s' % page.text)
+            LOG.info('type %s' % page.headers['Content-Type'])
+            LOG.debug('body %s'% page.request.body)
             if verbosity >= 3:
                 print(_("Return code:"),page.status_code)
         except:
