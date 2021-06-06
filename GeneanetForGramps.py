@@ -1151,7 +1151,7 @@ class GPerson(GBase):
                     LOG.debug(_("Unable to perform HTML analysis via requests"))
                     import urllib.request
                     page = urllib.request.urlopen(purl)
-                    tree = html.fromstring(str(page))
+                    tree = html.fromstring(page.read())
                     LOG.info(str(page))
 
                 from lxml import etree                
@@ -1661,7 +1661,7 @@ class GPerson(GBase):
                     spouse.spouse.append(self)
                     # Create a GFamily with them and do a Geaneanet to Gramps for it
                     if verbosity >= 2:
-                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + "&" + "+spouse.firstname+" "+spouse.lastname)
+                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + " +spouse.firstname+" "+spouse.lastname)
                 if self.sex == 'M':
                     f = GFamily(self,spouse)
                 elif self.sex == 'F':
