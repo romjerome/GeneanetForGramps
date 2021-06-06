@@ -1661,7 +1661,7 @@ class GPerson(GBase):
                     spouse.spouse.append(self)
                     # Create a GFamily with them and do a Geaneanet to Gramps for it
                     if verbosity >= 2:
-                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + " +spouse.firstname+" "+spouse.lastname)
+                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + "& +spouse.firstname+" "+spouse.lastname)
                 if self.sex == 'M':
                     f = GFamily(self,spouse)
                 elif self.sex == 'F':
