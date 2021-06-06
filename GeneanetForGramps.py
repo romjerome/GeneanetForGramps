@@ -1188,7 +1188,7 @@ class GPerson(GBase):
                 if verbosity >= 2:
                     print(_("Sex:"), self.g_sex)
                 try:
-                    bstring = '//div[@id="perso"]//ul[0]/li[0]'
+                    bstring = '//div[@id="perso"]/ul[0]/li[0]/text()'
                     if verbosity >= 3:
                         print("bstring: "+bstring)
                     birth = tree.xpath(bstring)
@@ -1198,7 +1198,7 @@ class GPerson(GBase):
                 if verbosity >= 3:
                     print(_("birth")+": %s"%(birth))
                 try:
-                    dstring = '//div[@id="perso"]//ul[0]/li[1]'
+                    dstring = '//div[@id="perso"]/ul[0]/li[1]/text()'
                     if verbosity >= 3:
                         print("dstring: "+dstring)
                     death = tree.xpath(dstring)
