@@ -33,7 +33,6 @@ import sys
 import re
 import random
 from lxml import html
-import requests
 import argparse
 from datetime import datetime
 import uuid
@@ -1126,6 +1125,7 @@ class GPerson(GBase):
         if not purl:
             return()
         try:
+            import requests # for windows os and mac os 
             if verbosity >= 1:
                 print("-----------------------------------------------------------")
                 print(_("Page considered:"),purl)
