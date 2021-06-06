@@ -1145,11 +1145,15 @@ class GPerson(GBase):
         else:
             if page.ok:
                 try:
-                    tree = html.fromstring(str(page.content))
+                    tree = html.fromstring(page.content)
+                    LOG.info(str(page.content))
                 except:
-                    print(_("Unable to perform HTML analysis"))
+                    LOG.debug(_("Unable to perform HTML analysis via requests"))
+                    import urllib.request
+                    page = urllib.request.urlopen(purl)
+                    tree = html.fromstring(str(page))
+                    LOG.info(str(page))
 
-                LOG.info(str(page.content))
                 from lxml import etree                
                 find_text = etree.XPath("//text()", smart_strings=False)
                 LOG.debug(find_text(tree))
