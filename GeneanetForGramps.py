@@ -1125,10 +1125,10 @@ class GPerson(GBase):
         if not purl:
             return()
         try:
-            import requests # for windows os and mac os 
+            import requests # for windows os and mac os
             if verbosity >= 1:
                 print("-----------------------------------------------------------")
-                print(_("Page considered:"),purl)
+                print(_("Page considered:"), purl)
             s = requests.session()
             s.auth = ('user', 'pass')
             header = s.head(purl)
@@ -1139,9 +1139,9 @@ class GPerson(GBase):
             LOG.info('type %s' % page.headers['Content-Type'])
             LOG.debug('body %s'% page.request.body)
             if verbosity >= 3:
-                print(_("Return code:"),page.status_code)
+                print(_("Return code:"), page.status_code)
         except:
-            print(_("We failed to reach the server at"),purl)
+            print(_("We failed to reach the server at"), purl)
         else:
             if page.ok:
                 try:
@@ -1149,6 +1149,7 @@ class GPerson(GBase):
                     LOG.info(str(page.content))
                 except:
                     LOG.debug(_("Unable to perform HTML analysis via requests"))
+                    # os.system('''wget "%(url)s"''' % {'url': purl})
                     import urllib.request
                     page = urllib.request.urlopen(purl)
                     tree = html.fromstring(page.read())
