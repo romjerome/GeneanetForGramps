@@ -571,6 +571,7 @@ class GBase:
                 func = getattr(gobj,'set_'+attr+'_ref')
                 reffunc = func(eventref)
                 db.commit_event(event, tran)
+                gobj.add_tag(tag.handle)
                 db.commit_person(gobj, tran)
             elif gobj.__class__.__name__ == 'Family':
                 eventref.set_role(EventRoleType.FAMILY)
@@ -578,6 +579,7 @@ class GBase:
                 if attr == 'marriage':
                     gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
                 db.commit_event(event, tran)
+                gobj.add_tag(tag.handle)
                 db.commit_family(gobj, tran)
             if verbosity >= 2:
                 print(_("Creating ")+attr+" ("+str(uptype)+") "+_("Event"))
@@ -628,7 +630,7 @@ class GBase:
             if verbosity >= 2 and self.__dict__[attr+'date']:
                 print(_("Update ")+attr+_(" Date to ")+self.__dict__[attr+'date'])
             event.set_date_object(date)
-            db.commit_event(event,tran)
+            db.commit_event(event, tran)
 
             if self.__dict__[attr+'place'] \
                 or self.__dict__[attr+'placecode'] :
@@ -636,20 +638,28 @@ class GBase:
                     placename = self.__dict__[attr+'place']
                 else:
                     placename = ""
-                place = self.get_or_create_place(event,placename)
+                place = self.get_or_create_place(event, placename)
                 # TODO: Here we overwrite any existing value.
                 # Check whether that can be a problem
                 place.set_name(PlaceName(value=placename))
                 if self.__dict__[attr+'placecode']:
                     place.set_code(self.__dict__[attr+'placecode'])
-                db.add_place(place,tran)
+                place_tag = _('place from geneanet')
+                if db.get_tag_from_name(place_tag):
+                    ptag = db.get_tag_from_name(place_tag)
+                else:
+                    ptag = Tag()
+                    ptag.set_name(place_tag)
+                db.add_tag(ptag, tran)
+                place.add_tag(ptag.handle)
+                db.add_place(place, tran)
                 event.set_place_handle(place.get_handle())
-                db.commit_event(event,tran)
+                db.commit_event(event, tran)
 
-        db.commit_event(event,tran)
+        db.commit_event(event, tran)
         return
 
-    def get_gramps_date(self,evttype):
+    def get_gramps_date(self, evttype):
         '''
         Give back the date of the event related to the GPerson or GFamily
         as a string ISO formated
@@ -754,7 +764,7 @@ class GFamily(GBase):
         '''
         with DbTxn("Geneanet import", db) as tran:
             grampsf = Family()
-            db.add_family(grampsf,tran)
+            db.add_family(grampsf, tran)
             self.gid = grampsf.gramps_id
             self.family = grampsf
             if verbosity >= 2:
@@ -900,7 +910,7 @@ class GFamily(GBase):
             # When it's not the case create the family
             if self.family == None:
                 self.family = Family()
-                db.add_family(self.family,tran)
+                db.add_family(self.family, tran)
 
             try:
                 grampsp0 = db.get_person_from_gramps_id(self.father.gid)
@@ -916,9 +926,9 @@ class GFamily(GBase):
                     if verbosity >= 2:
                         print(_("Can't affect father to the family"))
 
-                db.commit_family(self.family,tran)
+                db.commit_family(self.family, tran)
                 grampsp0.add_family_handle(self.family.get_handle())
-                db.commit_person(grampsp0,tran)
+                db.commit_person(grampsp0, tran)
 
             try:
                 grampsp1 = db.get_person_from_gramps_id(self.mother.gid)
@@ -934,9 +944,9 @@ class GFamily(GBase):
                     if verbosity >= 2:
                         print(_("Can't affect mother to the family"))
 
-                db.commit_family(self.family,tran)
+                db.commit_family(self.family, tran)
                 grampsp1.add_family_handle(self.family.get_handle())
-                db.commit_person(grampsp1,tran)
+                db.commit_person(grampsp1, tran)
 
             # Now celebrate the marriage ! (if needed)
             timelog = _('marriage from Geneanet')
@@ -981,9 +991,9 @@ class GFamily(GBase):
                             print(_("No handle for this child"))
                     self.family.add_child_ref(childref)
                     with DbTxn("Geneanet import", db) as tran:
-                        db.commit_family(self.family,tran)
+                        db.commit_family(self.family, tran)
                         child.grampsp.add_parent_family_handle(self.family.get_handle())
-                        db.commit_person(child.grampsp,tran)
+                        db.commit_person(child.grampsp, tran)
 
     def recurse_children(self,level):
         '''
@@ -1398,7 +1408,7 @@ class GPerson(GBase):
         '''
         with DbTxn("Geneanet import", db) as tran:
             grampsp = Person()
-            db.add_person(grampsp,tran)
+            db.add_person(grampsp, tran)
             self.gid = grampsp.gramps_id
             self.grampsp = grampsp
             if verbosity >= 1:
@@ -1531,7 +1541,7 @@ class GPerson(GBase):
                     url.set_path(self.url)
                     grampsp.add_url(url)
 
-            db.commit_person(grampsp,tran)
+            db.commit_person(grampsp, tran)
             db.enable_signals()
             db.request_rebuild()
 
