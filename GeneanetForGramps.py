@@ -519,7 +519,11 @@ class GBase:
         gobj is a gramps object Person or Family
         '''
 
-        default_tag = timelog
+        if config.get('preferences.tag-on-import'):
+            pref = config.get('preferences.tag-on-import-format')
+            default_tag = time.strftime(pref)
+        else:
+            default_tag= timelog
         event = None
         # Manages name indirection for person
         if gobj.__class__.__name__ == 'Person':
@@ -1842,11 +1846,11 @@ def geneanet_to_gramps(p, level, gid, url):
         progress.step()
     return(p)
 
-def g2gaction(gid,purl):
+def g2gaction(gid, purl):
     global progress
 
     # Create the first Person
-    gp = geneanet_to_gramps(None,0,gid,purl)
+    gp = geneanet_to_gramps(None,0, gid, purl)
 
     if gp != None:
         if ascendants:
@@ -1938,7 +1942,7 @@ def main():
         print(_("WARNING: Force mode activated"))
         time.sleep(TIMEOUT)
 
-    g2gaction(gid,purl)
+    g2gaction(gid, purl)
 
     db.close()
     sys.exit(0)
