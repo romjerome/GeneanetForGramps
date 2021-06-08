@@ -62,7 +62,9 @@ from gramps.gen.config import config
 from gramps.gen.db import DbTxn
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
-from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType, Url, UrlType
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, \
+Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType, \
+Tag, Url, UrlType
 
 # Gramps GUI
 from gramps.gen.const import URL_MANUAL_PAGE
@@ -509,7 +511,7 @@ class GBase:
                 place = keep
         return(place)
 
-    def get_or_create_event(self,gobj,attr,tran):
+    def get_or_create_event(self, gobj, attr, tran, timelog):
         '''
         Create Birth and Death Events for a person
         and Marriage Events for a family or get an existing one
@@ -517,6 +519,7 @@ class GBase:
         gobj is a gramps object Person or Family
         '''
 
+        default_tag = timelog
         event = None
         # Manages name indirection for person
         if gobj.__class__.__name__ == 'Person':
@@ -552,7 +555,14 @@ class GBase:
                 event.set_description(str(self.title[0]))
             except:
                 event.set_description(_("No title"))
-            db.add_event(event,tran)
+            if db.get_tag_from_name(default_tag):
+               tag = db.get_tag_from_name(default_tag)
+            else:
+               tag = Tag()
+               tag.set_name(default_tag)
+            db.add_tag(tag, tran)
+            event.add_tag(tag.handle)
+            db.add_event(event, tran)
 
             eventref = EventRef()
             eventref.set_role(role)
@@ -560,15 +570,15 @@ class GBase:
             if gobj.__class__.__name__ == 'Person':
                 func = getattr(gobj,'set_'+attr+'_ref')
                 reffunc = func(eventref)
-                db.commit_event(event,tran)
-                db.commit_person(gobj,tran)
+                db.commit_event(event, tran)
+                db.commit_person(gobj, tran)
             elif gobj.__class__.__name__ == 'Family':
                 eventref.set_role(EventRoleType.FAMILY)
                 gobj.add_event_ref(eventref)
                 if attr == 'marriage':
                     gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
-                db.commit_event(event,tran)
-                db.commit_family(gobj,tran)
+                db.commit_event(event, tran)
+                db.commit_family(gobj, tran)
             if verbosity >= 2:
                 print(_("Creating ")+attr+" ("+str(uptype)+") "+_("Event"))
 
@@ -929,7 +939,8 @@ class GFamily(GBase):
                 db.commit_person(grampsp1,tran)
 
             # Now celebrate the marriage ! (if needed)
-            self.get_or_create_event(self.family,'marriage',tran)
+            timelog = _('marriage from Geneanet')
+            self.get_or_create_event(self.family, 'marriage', tran, timelog)
 
     def smartcopy(self):
         '''
@@ -1500,7 +1511,8 @@ class GPerson(GBase):
 
             # We need to create events for Birth and Death
             for ev in ['birth', 'death']:
-                self.get_or_create_event(grampsp,ev,tran)
+                timelog = _('event from Geneanet')
+                self.get_or_create_event(grampsp, ev, tran, timelog)
 
             # Store the importation place as an Internet note
             if self.url != "":
