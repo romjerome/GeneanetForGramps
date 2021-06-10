@@ -1315,8 +1315,10 @@ class GPerson(GBase):
                             except:
                                 sref.append("")
 
-                    LOG.debug(ROOTURL+sref[s])
-                    self.spouseref.append(ROOTURL+sref[s])
+                    if s in sref:
+                        self.spouseref.append(ROOTURL+sref[s])
+                    else:
+                        LOG.debug('index issue on spouseref "%s"' % sref)
 
                     try:
                         marriage.append(str(spouse.xpath('em/text()')[0]))
