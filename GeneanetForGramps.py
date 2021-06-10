@@ -1315,6 +1315,7 @@ class GPerson(GBase):
                             except:
                                 sref.append("")
 
+                    LOG.debug(ROOTURL+sref[s])
                     self.spouseref.append(ROOTURL+sref[s])
 
                     try:
