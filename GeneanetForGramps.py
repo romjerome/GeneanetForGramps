@@ -103,7 +103,7 @@ force = False
 ascendants = False
 descendants = False
 spouses = False
-LEVEL = 2
+LEVEL = 4
 ROOTURL = 'https://gw.geneanet.org/'
 GUIMODE = False
 progress = None
@@ -969,7 +969,7 @@ class GFamily(GBase):
         self._smartcopy("marriageplace")
         self._smartcopy("marriageplacecode")
 
-    def add_child(self,child):
+    def add_child(self, child):
         '''
         Adds a child GPerson child to the GFamily
         '''
@@ -1240,10 +1240,12 @@ class GPerson(GBase):
                     # sometime parents are using circle, sometimes disc !
                     parents = tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//li[@style="vertical-align:middle;list-style-type:disc" or @style="vertical-align:middle;list-style-type:circle"]')
                 except:
+                    LOG.debug(str(tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//')))
                     parents = []
                 try:
                     spouses = tree.xpath('//ul[@class="fiche_union"]/li')
                 except:
+                    LOG.debug(str(tree.xpath('//ul[@class="fiche_union"]/li')))
                     spouses = []
                 try:
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
@@ -1358,13 +1360,13 @@ class GPerson(GBase):
                                 try:
                                     cname = c.xpath('a/text()')[0].title()
                                     if verbosity >= 2:
-                                        print(_("Child %d name: %s")%(cnum,cname))
+                                        print(_("Child %d name: %s")%(cnum, cname))
                                 except:
                                     cname = ""
                                 try:
                                     cref = ROOTURL+str(a.xpath('attribute::href')[0])
                                     if verbosity >= 2:
-                                        print(_("Child %d ref: %s")%(cnum,cref))
+                                        print(_("Child %d ref: %s")%(cnum, cref))
                                 except:
                                     cref = None
 
@@ -1373,6 +1375,7 @@ class GPerson(GBase):
                     self.childref.append(clist)
                     s = s + 1
                     # End spouse loop
+                LOG.info('clist %s' % clist)
 
                 self.fref = ""
                 self.mref = ""
@@ -1395,7 +1398,7 @@ class GPerson(GBase):
                                     pref = ""
 
                         if verbosity >= 1:
-                           print(_("Parent name: %s (%s)")%(pname,ROOTURL+pref))
+                           print(_("Parent name: %s (%s)")%(pname, ROOTURL+pref))
                         prefl.append(ROOTURL+str(pref))
                 try:
                     self.fref = prefl[0]
@@ -1555,7 +1558,7 @@ class GPerson(GBase):
             db.enable_signals()
             db.request_rebuild()
 
-    def from_gramps(self,gid):
+    def from_gramps(self, gid):
         '''
         Fill a GPerson with its Gramps data
         '''
@@ -1581,7 +1584,7 @@ class GPerson(GBase):
                 print(_("Existing Gramps Person: %s")%(self.gid))
         except:
             if verbosity >= 1:
-                print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
+                print(_("WARNING: Unable to retrieve id %s from the gramps db %s") %(gid, gname))
 
         if not found:
             # If we don't know who this is, try to find it in Gramps
@@ -1606,7 +1609,7 @@ class GPerson(GBase):
         if name[1]:
             self.lastname = name[0]
         if verbosity >= 2:
-            print(_("===> Gramps Name of %s: %s %s")%(self.gid,self.firstname,self.lastname))
+            print(_("===> Gramps Name of %s: %s %s")%(self.gid, self.firstname, self.lastname))
 
         try:
             bd = self.get_gramps_date(EventType.BIRTH)
@@ -1688,7 +1691,7 @@ class GPerson(GBase):
                     spouse = s
                     break
             if not spouse:
-                spouse = geneanet_to_gramps(None,level,None,self.spouseref[i])
+                spouse = geneanet_to_gramps(None, level, None, self.spouseref[i])
                 if spouse:
                     self.spouse.append(spouse)
                     spouse.spouse.append(self)
@@ -1696,9 +1699,9 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + "+spouse.firstname+" "+spouse.lastname)
                 if self.sex == 'M':
-                    f = GFamily(self,spouse)
+                    f = GFamily(self, spouse)
                 elif self.sex == 'F':
-                    f = GFamily(spouse,self)
+                    f = GFamily(spouse, self)
                 else:
                     if verbosity >= 1:
                         print(_("Unable to Initialize Family of ")+self.firstname+" "+self.lastname+_(" sex unknown"))
@@ -1725,7 +1728,7 @@ class GPerson(GBase):
             level = level + 1
 
             if self.father:
-                geneanet_to_gramps(self.father,level,self.father.gid,self.fref)
+                geneanet_to_gramps(self.father, level, self.father.gid, self.fref)
                 if self.mother:
                     self.mother.spouse.append(self.father)
 
@@ -1737,7 +1740,7 @@ class GPerson(GBase):
                     print(_("=> End of recursion on the parents of ")+self.father.firstname+" "+self.father.lastname)
 
             if self.mother:
-                geneanet_to_gramps(self.mother,level,self.mother.gid,self.mref)
+                geneanet_to_gramps(self.mother, level, self.mother.gid, self.mref)
                 if self.father:
                     self.father.spouse.append(self.mother)
                 if verbosity >= 2:
@@ -1750,7 +1753,7 @@ class GPerson(GBase):
             # Create a GFamily with them and do a Geaneanet to Gramps for it
             if verbosity >= 2:
                 print(_("=> Initialize Parents Family of ")+self.firstname+" "+self.lastname)
-            f = GFamily(self.father,self.mother)
+            f = GFamily(self.father, self.mother)
             f.from_geneanet()
             f.from_gramps(f.gid)
             f.to_gramps()
