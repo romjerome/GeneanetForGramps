@@ -1364,12 +1364,16 @@ class GPerson(GBase):
                                         print(_("Child %d name: %s")%(cnum, cname))
                                 except:
                                     cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
+                                    LOG.debug(cname)
                                 try:
                                     cref = ROOTURL+str(a.xpath('attribute::href')[0])
                                     if verbosity >= 2:
                                         print(_("Child %d ref: %s") %(cnum, cref))
                                 except:
                                     cref = None
+                        else:
+                            LOG.info(etree.tostring(c, method='html', pretty_print=False))
+                            LOG.debug('Failed to set children %s' % cnum)
 
                         clist.append(cref)
                         cnum = cnum + 1
@@ -1384,31 +1388,40 @@ class GPerson(GBase):
                 for p in parents:
                     LOG.info(etree.tostring(p, method='xml', pretty_print=True))
                     if verbosity >= 3:
-                        print(p.xpath('text()'))
+                        print('parent text', p.xpath('text()'))
                     if p.xpath('text()')[0] == '\n':
                         for a in p.xpath('a'):
                             sosa = a.find('img')
                             if sosa is None:
                                 try:
                                     pname = a.xpath('text()')[0].title()
+                                    LOG.info(pnane)
                                 except:
                                     pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
+                                    LOG.debug(pname)
                                     # if pname is ? ? then go to next one
                                 try:
                                     pref = a.xpath('attribute::href')[0]
+                                    LOG.info(pref)
                                 except:
+                                    LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
                                     pref = ""
 
                         if verbosity >= 1:
                            print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
                         prefl.append(ROOTURL+str(pref))
+                    else:
+                        LOG.info(etree.tostring(p, method='html', pretty_print=False))
+                        LOG.debug('Failed to set parents')
                 try:
                     self.fref = prefl[0]
                 except:
+                    LOG.debug('no ref for parent 1')
                     self.fref = ""
                 try:
                     self.mref = prefl[1]
                 except:
+                    LOG.debug('no ref for parent 2')
                     self.mref = ""
                 if verbosity >= 2:
                     print("-----------------------------------------------------------")
