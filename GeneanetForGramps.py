@@ -1179,7 +1179,10 @@ class GPerson(GBase):
                     LOG.debug(_("Unable to perform HTML analysis via requests"))
                     # os.system('''wget "%(url)s"''' % {'url': purl})
                     import urllib.request
-                    page = urllib.request.urlopen(purl)
+                    try:
+                        page = urllib.request.urlopen(purl)
+                    except urllib.error.HTTPError:
+                        LOG.debug(purl)
                     tree = html.fromstring(page.read())
                     LOG.info(str(page))
 
@@ -1389,30 +1392,33 @@ class GPerson(GBase):
                     LOG.info(etree.tostring(p, method='xml', pretty_print=True))
                     if verbosity >= 3:
                         print('parent text', p.xpath('text()'))
-                    if p.xpath('text()')[0] == '\n':
-                        for a in p.xpath('a'):
-                            sosa = a.find('img')
-                            if sosa is None:
-                                try:
-                                    pname = a.xpath('text()')[0].title()
-                                    LOG.info(pnane)
-                                except:
-                                    pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
-                                    LOG.debug(pname)
+                    LOG.info(p.text)
+                    for a in p.xpath('a'):
+                        pref = a.xpath('attribute::href')[0]
+                        LOG.debug(pref[0])
+                    #if p.xpath('a'):
+                        #for a in p.xpath('a')[0]:
+                            #sosa = a.find('img')
+                            #if sosa is None:
+                                #try:
+                                    #pname = a.xpath('text()')[0].title()
+                                    #LOG.info(pnane)
+                                #except:
+                                    #pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
+                                    #LOG.debug(pname)
                                     # if pname is ? ? then go to next one
-                                try:
-                                    pref = a.xpath('attribute::href')[0]
-                                    LOG.info(pref)
-                                except:
-                                    LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
-                                    pref = ""
-
-                        if verbosity >= 1:
-                           print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
+                                #try:
+                                    #pref = a.xpath('attribute::href')[0]
+                                    #LOG.info(pref)
+                                #except:
+                                    #LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
+                                    #pref = ""
+                        #if verbosity >= 1:
+                           #print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
+                    #else:
+                        #LOG.info(etree.tostring(p, method='html', pretty_print=False))
+                        #LOG.debug('Failed to set parents %s' % p.text)
                         prefl.append(ROOTURL+str(pref))
-                    else:
-                        LOG.info(etree.tostring(p, method='html', pretty_print=False))
-                        LOG.debug('Failed to set parents')
                 try:
                     self.fref = prefl[0]
                 except:
