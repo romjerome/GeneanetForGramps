@@ -32,7 +32,7 @@ import io
 import sys
 import re
 import random
-from lxml import html
+from lxml import html, etree
 import argparse
 from datetime import datetime
 import uuid
@@ -1118,7 +1118,7 @@ class GPerson(GBase):
         self._smartcopy("deathplace")
         self._smartcopy("deathplacecode")
 
-    def from_geneanet(self,purl):
+    def from_geneanet(self, purl):
         ''' Use XPath to retrieve the details of a person
         Used example from https://gist.github.com/IanHopkinson/ad45831a2fb73f537a79
         and doc from https://www.w3schools.com/xml/xpath_axes.asp
@@ -1354,6 +1354,7 @@ class GPerson(GBase):
                     cnum = 0
                     clist = []
                     for c in spouse.xpath('ul/li'):
+                        LOG.info(etree.tostring(c, method='xml', pretty_print=True))
                         for a in c.xpath('a'):
                             sosa = a.find('img')
                             if sosa is None:
@@ -1362,11 +1363,11 @@ class GPerson(GBase):
                                     if verbosity >= 2:
                                         print(_("Child %d name: %s")%(cnum, cname))
                                 except:
-                                    cname = ""
+                                    cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
                                 try:
                                     cref = ROOTURL+str(a.xpath('attribute::href')[0])
                                     if verbosity >= 2:
-                                        print(_("Child %d ref: %s")%(cnum, cref))
+                                        print(_("Child %d ref: %s") %(cnum, cref))
                                 except:
                                     cref = None
 
@@ -1381,6 +1382,7 @@ class GPerson(GBase):
                 self.mref = ""
                 prefl = []
                 for p in parents:
+                    LOG.info(etree.tostring(p, method='xml', pretty_print=True))
                     if verbosity >= 3:
                         print(p.xpath('text()'))
                     if p.xpath('text()')[0] == '\n':
@@ -1390,7 +1392,7 @@ class GPerson(GBase):
                                 try:
                                     pname = a.xpath('text()')[0].title()
                                 except:
-                                    pname = ""
+                                    pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
                                     # if pname is ? ? then go to next one
                                 try:
                                     pref = a.xpath('attribute::href')[0]
@@ -1398,7 +1400,7 @@ class GPerson(GBase):
                                     pref = ""
 
                         if verbosity >= 1:
-                           print(_("Parent name: %s (%s)")%(pname, ROOTURL+pref))
+                           print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
                         prefl.append(ROOTURL+str(pref))
                 try:
                     self.fref = prefl[0]
