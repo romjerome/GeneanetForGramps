@@ -842,12 +842,19 @@ class GFamily(GBase):
 
         if idx < len(self.father.spouseref):
             # We found one
-            self.g_marriagedate = self.father.marriagedate[idx]
-            self.g_marriageplace = self.father.marriageplace[idx]
-            self.g_marriageplacecode = self.father.marriageplacecode[idx]
-            for c in self.father.childref[idx]:
-                LOG.info(c)
-                self.g_childref.append(c)
+            try:
+                self.g_marriagedate = self.father.marriagedate[idx]
+                self.g_marriageplace = self.father.marriageplace[idx]
+                self.g_marriageplacecode = self.father.marriageplacecode[idx]
+            except:
+                LOG.debug('marriage, father and spouse(%s)' % idx)
+            try:
+                for c in self.father.childref[idx]:
+                    LOG.info(c)
+                    self.g_childref.append(c)
+            except:
+                LOG.debug('child, father and spouse(%s)' % idx)
+            
 
         if self.g_marriagedate and self.g_marriageplace and self.g_marriageplacecode:
             if verbosity >= 2:
@@ -1162,6 +1169,8 @@ class GPerson(GBase):
             s.auth = ('user', 'pass')
             header = s.head(purl)
             LOG.info('header %s' % header)
+            if header == "<Response [302]>":
+                LOG.debug('Need to log in?')
             page = s.get(purl)
             LOG.info('content %s' % page.content)
             LOG.info('text %s' % page.text)
