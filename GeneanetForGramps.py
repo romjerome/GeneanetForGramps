@@ -229,12 +229,12 @@ class GeneanetForGrampsOptions(MenuToolOptions):
         # Do not know if this works!
         # Not registered for possible privacy issues, so only local settings
         self.__user = 'user'
-        self.__user = StringOption(_("Account"), 'mon compte geneanet')
+        self.__user = StringOption(_("Account"), 'Identifiant ou adresse e-mail')
         self.__user.set_help(_("Experimental field for setting geneanet stuff (user)"))
         menu.add_option(category_name, "user", self.__user)
    
         self.__pass = 'pass'
-        self.__pass = StringOption(_("Password"), 'mon mot de passe')
+        self.__pass = StringOption(_("Password"), 'Mot de passe')
         self.__pass.set_help(_("Experimental field for setting geneanet stuff (password)"))
         menu.add_option(category_name, "pass", self.__pass)
 
@@ -1174,27 +1174,29 @@ class GPerson(GBase):
             print(_("Purl:"),purl)
         if not purl:
             return()
-        try:
-            import requests # for windows os and mac os
-            if verbosity >= 1:
-                print("-----------------------------------------------------------")
-                print(_("Page considered:"), purl)
-            s = requests.session()
-            s.auth = (self.user, self.password)
-            header = s.head(purl)
-            LOG.info('header %s' % header)
-            if header == "<Response [302]>":
-                LOG.debug('Need to log in?')
-            page = s.get(purl)
-            LOG.info('content %s' % page.content)
-            LOG.info('text %s' % page.text)
-            LOG.info('type %s' % page.headers['Content-Type'])
-            LOG.debug('body %s'% page.request.body)
-            if verbosity >= 3:
-                print(_("Return code:"), page.status_code)
-        except:
-            print(_("We failed to reach the server at"), purl)
+        if os.name != 'nt' and sys.platform != 'darwin':
+            try:
+                import requests # windows os and mac os ?
+                if verbosity >= 1:
+                    print("-----------------------------------------------------------")
+                    print(_("Page considered:"), purl)
+                s = requests.session()
+                s.auth = (self.user, self.password)
+                header = s.head(purl)
+                LOG.info('header %s' % header)
+                if header == "<Response [302]>":
+                    LOG.debug('Need to log in?')
+                page = s.get(purl)
+                LOG.info('content %s' % page.content)
+                LOG.info('text %s' % page.text)
+                LOG.info('type %s' % page.headers['Content-Type'])
+                LOG.debug('body %s'% page.request.body)
+                if verbosity >= 3:
+                    print(_("Return code:"), page.status_code)
+            except:
+                print(_("We failed to reach the server at"), purl)
         else:
+            LOG.debug("How to handle HTML page on non linux environments?")
             if page.ok:
                 try:
                     tree = html.fromstring(page.content)
