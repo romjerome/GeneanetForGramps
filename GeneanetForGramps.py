@@ -1329,7 +1329,7 @@ class GPerson(GBase):
                 marriage = []
                 for spouse in spouses:
                     for a in spouse.xpath('a'):
-                        ref = a.xpath('attribute::href')[0]
+                        ref = a.xpath('attribute::href')[s]
                         LOG.debug(ref)
                         sosa = a.find('img')
                         if sosa is None:
