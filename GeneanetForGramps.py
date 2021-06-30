@@ -1329,24 +1329,24 @@ class GPerson(GBase):
                 marriage = []
                 for spouse in spouses:
                     for a in spouse.xpath('a'):
-                        sref = a.xpath('attribute::href')[0]
-                        LOG.debug(sref)
-                        #sosa = a.find('img')
-                        #if sosa is None:
-                            #try:
-                                #sname.append(str(a.xpath('text()')[0]).title())
-                                #if verbosity >= 2:
-                                    #print(_("Spouse name:"), sname[s])
-                            #except:
-                                #sname.append("")
-                            #try:
-                                #sref.append(str(a.xpath('attribute::href')[0]))
-                                #if verbosity >= 2:
-                                    #print(_("Spouse ref:"), ROOTURL+sref[s])
-                            #except:
-                                #sref.append("")
+                        ref = a.xpath('attribute::href')[0]
+                        LOG.debug(ref)
+                        sosa = a.find('img')
+                        if sosa is None:
+                            try:
+                                sname.append(str(a.xpath('text()')[0]).title())
+                                if verbosity >= 2:
+                                    print(_("Spouse name:"), sname[s])
+                            except:
+                                sname.append("")
+                            try:
+                                sref.append(str(a.xpath('attribute::href')[0]))
+                                if verbosity >= 2:
+                                    print(_("Spouse ref:"), ROOTURL+sref[s])
+                            except:
+                                sref.append("")
 
-                        self.spouseref.append(ROOTURL+sref)
+                        self.spouseref.append(ROOTURL+sref[0])
                     try:
                         marriage.append(str(spouse.xpath('em/text()')[0]))
                     except:
@@ -1383,24 +1383,24 @@ class GPerson(GBase):
                         for a in c.xpath('a'):
                             cref = a.xpath('attribute::href')[0]
                             LOG.debug(cref)
-                            #sosa = a.find('img')
-                            #if sosa is None:
-                                #try:
-                                    #cname = c.xpath('a/text()')[0].title()
-                                    #if verbosity >= 2:
-                                        #print(_("Child %d name: %s")%(cnum, cname))
-                                #except:
-                                    #cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
-                                    #LOG.debug(cname)
-                                #try:
-                                    #cref = ROOTURL+str(a.xpath('attribute::href')[0])
-                                    #if verbosity >= 2:
-                                        #print(_("Child %d ref: %s") %(cnum, cref))
-                                #except:
-                                    #cref = None
-                            #else:
-                                #LOG.info(etree.tostring(c, method='html', pretty_print=False))
-                                #LOG.debug('Failed to set children %s' % cnum)
+                            sosa = a.find('img')
+                            if sosa is None:
+                                try:
+                                    cname = c.xpath('a/text()')[0].title()
+                                    if verbosity >= 2:
+                                        print(_("Child %d name: %s")%(cnum, cname))
+                                except:
+                                    cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
+                                    LOG.debug(cname)
+                                try:
+                                    cref = ROOTURL+str(a.xpath('attribute::href')[0])
+                                    if verbosity >= 2:
+                                        print(_("Child %d ref: %s") %(cnum, cref))
+                                except:
+                                    cref = None
+                            else:
+                                LOG.info(etree.tostring(c, method='html', pretty_print=False))
+                                LOG.debug('Failed to set children %s' % cnum)
 
                             clist.append(cref)
                         cnum = cnum + 1
@@ -1420,27 +1420,27 @@ class GPerson(GBase):
                     for a in p.xpath('a'):
                         pref = a.xpath('attribute::href')[0]
                         LOG.debug(pref)
-                    #if p.xpath('a'):
-                        #for a in p.xpath('a')[0]:
-                            #sosa = a.find('img')
-                            #if sosa is None:
-                                #try:
-                                    #pname = a.xpath('text()')[0].title()
-                                    #LOG.info(pnane)
-                                #except:
-                                    #pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
-                                    #LOG.debug(pname)
+                    if p.xpath('a'):
+                        for a in p.xpath('a')[0]:
+                            sosa = a.find('img')
+                            if sosa is None:
+                                try:
+                                    pname = a.xpath('text()')[0].title()
+                                    LOG.info(pnane)
+                                except:
+                                    pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
+                                    LOG.debug(pname)
                                     # if pname is ? ? then go to next one
-                                #try:
-                                    #pref = a.xpath('attribute::href')[0]
-                                    #LOG.info(pref)
-                                #except:
-                                    #LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
-                                    #pref = ""
-                        #if verbosity >= 1:
-                           #print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
-                    #else:
-                        #LOG.info(etree.tostring(p, method='html', pretty_print=False))
+                                try:
+                                    pref = a.xpath('attribute::href')[0]
+                                    LOG.info(pref)
+                                except:
+                                    LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
+                                    pref = ""
+                            if verbosity >= 1:
+                                print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
+                    else:
+                        LOG.info(etree.tostring(p, method='html', pretty_print=False))
                         #LOG.debug('Failed to set parents %s' % p.text)
                         prefl.append(ROOTURL+str(pref))
                 try:
