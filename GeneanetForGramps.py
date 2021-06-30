@@ -1292,7 +1292,7 @@ class GPerson(GBase):
                     self.g_birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_birthplacecode)
                     if not match:
-                        self.g_birthplacecode = _("not match")
+                        self.g_birthplacecode = _("no match")
                     else:
                         if verbosity >= 2:
                             print(_("Birth place code:"), self.g_birthplacecode)
@@ -1329,8 +1329,13 @@ class GPerson(GBase):
                 marriage = []
                 for spouse in spouses:
                     for a in spouse.xpath('a'):
-                        ref = a.xpath('attribute::href')[s]
-                        LOG.debug(ref)
+                        try:
+                            ref = a.xpath('attribute::href')[s]
+                            if verbosity >= 2:
+                                print(_("Spouse %d ref: %s") %(s, ref))
+                        except:
+                            ref = None
+                            LOG.debug(str(a.xpath('attribute::href')))
                         sosa = a.find('img')
                         if sosa is None:
                             try:
@@ -1381,8 +1386,13 @@ class GPerson(GBase):
                     for c in spouse.xpath('ul/li'):
                         LOG.info(etree.tostring(c, method='xml', pretty_print=True))
                         for a in c.xpath('a'):
-                            cref = a.xpath('attribute::href')[cnum]
-                            LOG.debug(cref)
+                            try:
+                                cref = ROOTURL+str(a.xpath('attribute::href')[cnum])
+                                if verbosity >= 2:
+                                    print(_("Child %d ref: %s") %(cnum, cref))
+                            except:
+                                cref = None
+                                LOG.debug(str(a.xpath('attribute::href')))
                             sosa = a.find('img')
                             if sosa is None:
                                 try:
@@ -1392,12 +1402,6 @@ class GPerson(GBase):
                                 except:
                                     cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
                                     LOG.debug(cname)
-                                try:
-                                    cref = ROOTURL+str(a.xpath('attribute::href')[cnum])
-                                    if verbosity >= 2:
-                                        print(_("Child %d ref: %s") %(cnum, cref))
-                                except:
-                                    cref = None
                             else:
                                 LOG.info(etree.tostring(c, method='html', pretty_print=False))
                                 LOG.debug('Failed to set children %s' % cnum)
@@ -1442,7 +1446,8 @@ class GPerson(GBase):
                     else:
                         LOG.info(etree.tostring(p, method='html', pretty_print=False))
                         #LOG.debug('Failed to set parents %s' % p.text)
-                        prefl.append(ROOTURL+str(pref))
+                    prefl.append(ROOTURL+str(pref))
+                print(prefl)
                 try:
                     self.fref = prefl[0]
                 except:
