@@ -1186,7 +1186,7 @@ class GPerson(GBase):
             page = s.get(purl)
             if page.status_code == "302":
                 LOG.debug('Need to log in?')
-            LOG.info('content %s' % page.content)
+            LOG.info('content %s' % str(page.content))
             LOG.info('text %s' % page.text)
             LOG.info('type %s' % page.headers['Content-Type'])
             LOG.debug('body %s'% page.request.body)
@@ -1202,13 +1202,13 @@ class GPerson(GBase):
                 except XMLSyntaxError:
                     LOG.debug(_("Unable to perform HTML analysis"))
                     # os.system('''wget "%(url)s"''' % {'url': purl})
-                    import urllib.request
-                    try:
-                        page = urllib.request.urlopen(purl)
-                    except urllib.error.HTTPError:
-                        LOG.debug(purl)
-                    tree = html.fromstring(page.read())
-                    LOG.info(str(page))
+                import urllib.request
+                try:
+                    page = urllib.request.urlopen(purl)
+                except urllib.error.HTTPError:
+                    LOG.debug(purl)
+                tree = html.fromstring(page.read())
+                LOG.info(str(page))
 
                 #from lxml import etree                
                 #find_text = etree.XPath("//text()", smart_strings=False)
