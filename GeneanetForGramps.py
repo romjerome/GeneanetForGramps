@@ -226,6 +226,18 @@ class GeneanetForGrampsOptions(MenuToolOptions):
         #category_name = _("Options")
         category_name = _("Geneanet Import Options")
 
+        # Do not know if this works!
+        # Not registered for possible privacy issues, so only local settings
+        self.__user = 'user'
+        self.__user = StringOption(_("Account"), 'mon compte geneanet')
+        self.__user.set_help(_("Experimental field for setting geneanet stuff (user)"))
+        menu.add_option(category_name, "user", self.__user)
+   
+        self.__pass = 'pass'
+        self.__pass = StringOption(_("Password"), 'mon mot de passe')
+        self.__pass.set_help(_("Experimental field for setting geneanet stuff (password)"))
+        menu.add_option(category_name, "pass", self.__pass)
+
         self.__pid = PersonOption(_("Center Person"))
         self.__pid.set_help(_("The center person for the filter"))
         menu.add_option(category_name, "pid", self.__pid)
@@ -380,6 +392,8 @@ class GeneanetForGramps(PluginWindows.ToolManagedWindowBatch):
         verbosity = self.options.menu.get_option_by_name('gui_verb').get_value()
         if verbosity >= 3:
             print(_("LVL:"),LEVEL)
+        self.user = self.options.menu.get_option_by_name('user').get_value()
+        self.password = self.options.menu.get_option_by_name('pass').get_value()
         save_config()
 
 class GBase:
@@ -1166,7 +1180,7 @@ class GPerson(GBase):
                 print("-----------------------------------------------------------")
                 print(_("Page considered:"), purl)
             s = requests.session()
-            s.auth = ('user', 'pass')
+            s.auth = (self.user, self.password)
             header = s.head(purl)
             LOG.info('header %s' % header)
             if header == "<Response [302]>":
