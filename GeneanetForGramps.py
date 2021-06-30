@@ -1381,19 +1381,19 @@ class GPerson(GBase):
                     for c in spouse.xpath('ul/li'):
                         LOG.info(etree.tostring(c, method='xml', pretty_print=True))
                         for a in c.xpath('a'):
-                            cref = a.xpath('attribute::href')[0]
+                            cref = a.xpath('attribute::href')[cnum]
                             LOG.debug(cref)
                             sosa = a.find('img')
                             if sosa is None:
                                 try:
-                                    cname = c.xpath('a/text()')[0].title()
+                                    cname = c.xpath('a/text()')[cnum].title()
                                     if verbosity >= 2:
                                         print(_("Child %d name: %s")%(cnum, cname))
                                 except:
                                     cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
                                     LOG.debug(cname)
                                 try:
-                                    cref = ROOTURL+str(a.xpath('attribute::href')[0])
+                                    cref = ROOTURL+str(a.xpath('attribute::href')[cnum])
                                     if verbosity >= 2:
                                         print(_("Child %d ref: %s") %(cnum, cref))
                                 except:
