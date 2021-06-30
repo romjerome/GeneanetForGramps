@@ -1183,24 +1183,23 @@ class GPerson(GBase):
             s.auth = (self.user, self.password)
             header = s.head(purl)
             LOG.info('header %s' % header)
-            if header == "<Response [302]>":
-                LOG.debug('Need to log in?')
             page = s.get(purl)
+            if page.status_code == "302":
+                LOG.debug('Need to log in?')
             LOG.info('content %s' % page.content)
             LOG.info('text %s' % page.text)
             LOG.info('type %s' % page.headers['Content-Type'])
             LOG.debug('body %s'% page.request.body)
             if verbosity >= 3:
                 print(_("Return code:"), page.status_code)
-        else:
             LOG.debug("How to handle HTML page on non linux environments?")
             print(_("[Requests]: We failed to reach the server at"), purl)
             LOG.info("Fallback, try via built-in urllib module")
-            if page.ok:
+            if page.ok and page.status_code != "200":
                 try:
-                    tree = html.fromstring(page.content)
+                    tree = html.fromstring(str(page.content))
                     LOG.info(str(page.content))
-                except:
+                except XMLSyntaxError:
                     LOG.debug(_("Unable to perform HTML analysis"))
                     # os.system('''wget "%(url)s"''' % {'url': purl})
                     import urllib.request
