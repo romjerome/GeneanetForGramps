@@ -1447,7 +1447,6 @@ class GPerson(GBase):
                         LOG.info(etree.tostring(p, method='html', pretty_print=False))
                         #LOG.debug('Failed to set parents %s' % p.text)
                     prefl.append(ROOTURL+str(pref))
-                print(prefl)
                 try:
                     self.fref = prefl[0]
                 except:
