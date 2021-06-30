@@ -392,8 +392,6 @@ class GeneanetForGramps(PluginWindows.ToolManagedWindowBatch):
         verbosity = self.options.menu.get_option_by_name('gui_verb').get_value()
         if verbosity >= 3:
             print(_("LVL:"),LEVEL)
-        self.user = self.options.menu.get_option_by_name('user').get_value()
-        self.password = self.options.menu.get_option_by_name('pass').get_value()
         save_config()
 
 class GBase:
@@ -1123,6 +1121,8 @@ class GPerson(GBase):
         self.marriageplace = []
         self.marriageplacecode = []
         self.childref = []
+        self.user = "" #storage and privacy issues
+        self.password = "" #storage and privacy issues
 
     def smartcopy(self):
         '''
@@ -1175,28 +1175,27 @@ class GPerson(GBase):
         if not purl:
             return()
         if os.name != 'nt' and sys.platform != 'darwin':
-            try:
-                import requests # windows os and mac os ?
-                if verbosity >= 1:
-                    print("-----------------------------------------------------------")
-                    print(_("Page considered:"), purl)
-                s = requests.session()
-                s.auth = (self.user, self.password)
-                header = s.head(purl)
-                LOG.info('header %s' % header)
-                if header == "<Response [302]>":
-                    LOG.debug('Need to log in?')
-                page = s.get(purl)
-                LOG.info('content %s' % page.content)
-                LOG.info('text %s' % page.text)
-                LOG.info('type %s' % page.headers['Content-Type'])
-                LOG.debug('body %s'% page.request.body)
-                if verbosity >= 3:
-                    print(_("Return code:"), page.status_code)
-            except:
-                print(_("We failed to reach the server at"), purl)
+            import requests # windows os and mac os ?
+            if verbosity >= 1:
+                print("-----------------------------------------------------------")
+                print(_("Page considered:"), purl)
+            s = requests.session()
+            s.auth = (self.user, self.password)
+            header = s.head(purl)
+            LOG.info('header %s' % header)
+            if header == "<Response [302]>":
+                LOG.debug('Need to log in?')
+            page = s.get(purl)
+            LOG.info('content %s' % page.content)
+            LOG.info('text %s' % page.text)
+            LOG.info('type %s' % page.headers['Content-Type'])
+            LOG.debug('body %s'% page.request.body)
+            if verbosity >= 3:
+                print(_("Return code:"), page.status_code)
         else:
             LOG.debug("How to handle HTML page on non linux environments?")
+            print(_("[Requests]: We failed to reach the server at"), purl)
+            LOG.info("Fallback, try via built-in urllib module")
             if page.ok:
                 try:
                     tree = html.fromstring(page.content)
