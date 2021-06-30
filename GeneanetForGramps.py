@@ -1201,7 +1201,7 @@ class GPerson(GBase):
                     tree = html.fromstring(page.content)
                     LOG.info(str(page.content))
                 except:
-                    LOG.debug(_("Unable to perform HTML analysis via requests"))
+                    LOG.debug(_("Unable to perform HTML analysis"))
                     # os.system('''wget "%(url)s"''' % {'url': purl})
                     import urllib.request
                     try:
