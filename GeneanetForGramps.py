@@ -1334,25 +1334,25 @@ class GPerson(GBase):
                         sosa = a.find('img')
                         if sosa is None:
                             try:
-                                sname.append(str(a.xpath('text()')[0]).title())
+                                sname.append(str(a.xpath('text()')[s]).title())
                                 if verbosity >= 2:
                                     print(_("Spouse name:"), sname[s])
                             except:
                                 sname.append("")
                             try:
-                                sref.append(str(a.xpath('attribute::href')[0]))
+                                sref.append(str(a.xpath('attribute::href')[s]))
                                 if verbosity >= 2:
                                     print(_("Spouse ref:"), ROOTURL+sref[s])
                             except:
                                 sref.append("")
 
-                        self.spouseref.append(ROOTURL+sref[0])
+                        self.spouseref.append(ROOTURL+sref[s])
                     try:
-                        marriage.append(str(spouse.xpath('em/text()')[0]))
+                        marriage.append(str(spouse.xpath('em/text()')[s]))
                     except:
                         marriage.append(None)
                     try:
-                        ld = convert_date(marriage[s].split(',')[0].split()[1:])
+                        ld = convert_date(marriage[s].split(',')[s].split()[1:])
                         if verbosity >= 2:
                             print(_("Married:"), ld)
                         self.marriagedate.append(format_ca(ld))
