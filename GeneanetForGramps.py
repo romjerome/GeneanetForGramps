@@ -457,8 +457,8 @@ class GBase:
                     try:
                         if int(self.__dict__[attr]) < int(self.__dict__['g_'+attr]):
                             scopy = True
-                    except:
-                        LOG.debug(str(int(self.__dict__[attr])))
+                    except ValueError:
+                        LOG.debug(str(self.__dict__[attr]))
 
         # Copy only if date is more precise
         match = re.search(r'date$', attr)
