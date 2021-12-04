@@ -1287,7 +1287,7 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("Birth place:"), self.g_birthplace)
                 except:
-                    self.g_birthplace = str(uuid.uuid3(uuid.NAMESPACE_URL, str(birth)))
+                    self.g_birthplace = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                 try:
                     self.g_birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_birthplacecode)
@@ -1311,7 +1311,7 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("Death place:"), self.g_deathplace)
                 except:
-                    self.g_deathplace = str(uuid.uuid3(uuid.NAMESPACE_URL, str(death)))
+                    self.g_deathplace = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                 try:
                     self.g_deathplacecode = str(' '.join(death[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_deathplacecode)
@@ -1400,7 +1400,7 @@ class GPerson(GBase):
                                     if verbosity >= 2:
                                         print(_("Child %d name: %s")%(cnum, cname))
                                 except:
-                                    cname = str(uuid.uuid3(uuid.NAMESPACE_URL, str(cnum)))
+                                    cname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                                     LOG.debug(cname)
                             else:
                                 LOG.info(etree.tostring(c, method='html', pretty_print=False))
@@ -1432,7 +1432,7 @@ class GPerson(GBase):
                                     pname = a.xpath('text()')[0].title()
                                     LOG.info(pnane)
                                 except:
-                                    pname = str(uuid.uuid3(uuid.NAMESPACE_URL, 'parents'))
+                                    pname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                                     LOG.debug(pname)
                                     # if pname is ? ? then go to next one
                                 try:
