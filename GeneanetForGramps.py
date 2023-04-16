@@ -32,10 +32,10 @@ import io
 import sys
 import re
 import random
-from lxml import html, etree
+from lxml import html
+import requests
 import argparse
 from datetime import datetime
-import uuid
 
 #------------------------------------------------------------------------
 #
@@ -62,9 +62,7 @@ from gramps.gen.config import config
 from gramps.gen.db import DbTxn
 from gramps.gen.dbstate import DbState
 from gramps.cli.grampscli import CLIManager
-from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, \
-Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType, \
-Tag, Url, UrlType
+from gramps.gen.lib import Person, Name, Surname, NameType, Event, EventType, Date, Place, EventRoleType, EventRef, PlaceName, Family, ChildRef, FamilyRelType, Url, UrlType
 
 # Gramps GUI
 from gramps.gen.const import URL_MANUAL_PAGE
@@ -76,9 +74,6 @@ from gramps.gen.plug.menu import StringOption, PersonOption, BooleanOption, Numb
 from gramps.gui.utils import ProgressMeter
 
 LOG = logging.getLogger("GeneanetForGramps")
-
-handler = logging.FileHandler('info.log')
-LOG.addHandler(handler)
 
 TIMEOUT = 5
 
@@ -225,18 +220,6 @@ class GeneanetForGrampsOptions(MenuToolOptions):
             print(_("Add Plugin Menu Options"))
         #category_name = _("Options")
         category_name = _("Geneanet Import Options")
-
-        # Do not know if this works!
-        # Not registered for possible privacy issues, so only local settings
-        self.__user = 'user'
-        self.__user = StringOption(_("Account"), 'Identifiant ou adresse e-mail')
-        self.__user.set_help(_("Experimental field for setting geneanet stuff (user)"))
-        menu.add_option(category_name, "user", self.__user)
-   
-        self.__pass = 'pass'
-        self.__pass = StringOption(_("Password"), 'Mot de passe')
-        self.__pass.set_help(_("Experimental field for setting geneanet stuff (password)"))
-        menu.add_option(category_name, "pass", self.__pass)
 
         self.__pid = PersonOption(_("Center Person"))
         self.__pid.set_help(_("The center person for the filter"))
@@ -454,11 +437,8 @@ class GBase:
                 if not self.__dict__['g_'+attr]:
                     scopy = False
                 else:
-                    try:
-                        if int(self.__dict__[attr]) < int(self.__dict__['g_'+attr]):
-                            scopy = True
-                    except ValueError:
-                        LOG.debug(str(self.__dict__[attr]))
+                    if int(self.__dict__[attr]) < int(self.__dict__['g_'+attr]):
+                        scopy = True
 
         # Copy only if date is more precise
         match = re.search(r'date$', attr)
@@ -488,7 +468,6 @@ class GBase:
         '''
         Create Place for Events or get an existing one based on the name
         '''
-
         try:
             pl = event.get_place_handle()
         except:
@@ -512,7 +491,7 @@ class GBase:
                 pl = db.get_place_from_handle(handle)
                 explace = pl.get_name().value
                 if verbosity >= 4:
-                    LOG.debug((("search for "), str(placename),str(explace)))
+                    print(_("DEBUG: search for ")+str(placename)+_(" in ")+str(explace))
                 if str(explace) == str(placename):
                     keep = pl
                     break
@@ -526,7 +505,7 @@ class GBase:
                 place = keep
         return(place)
 
-    def get_or_create_event(self, gobj, attr, tran, timelog):
+    def get_or_create_event(self,gobj,attr,tran):
         '''
         Create Birth and Death Events for a person
         and Marriage Events for a family or get an existing one
@@ -534,11 +513,6 @@ class GBase:
         gobj is a gramps object Person or Family
         '''
 
-        if config.get('preferences.tag-on-import'):
-            pref = config.get('preferences.tag-on-import-format')
-            default_tag = time.strftime(pref)
-        else:
-            default_tag= timelog
         event = None
         # Manages name indirection for person
         if gobj.__class__.__name__ == 'Person':
@@ -570,18 +544,8 @@ class GBase:
             event = Event()
             uptype = getattr(EventType,attr.upper())
             event.set_type(EventType(uptype))
-            try:
-                event.set_description(str(self.title[0]))
-            except:
-                event.set_description(_("No title"))
-            if db.get_tag_from_name(default_tag):
-               tag = db.get_tag_from_name(default_tag)
-            else:
-               tag = Tag()
-               tag.set_name(default_tag)
-            db.add_tag(tag, tran)
-            event.add_tag(tag.handle)
-            db.add_event(event, tran)
+            event.set_description('Imported from Geaneanet')
+            db.add_event(event,tran)
 
             eventref = EventRef()
             eventref.set_role(role)
@@ -589,17 +553,15 @@ class GBase:
             if gobj.__class__.__name__ == 'Person':
                 func = getattr(gobj,'set_'+attr+'_ref')
                 reffunc = func(eventref)
-                db.commit_event(event, tran)
-                gobj.add_tag(tag.handle)
-                db.commit_person(gobj, tran)
+                db.commit_event(event,tran)
+                db.commit_person(gobj,tran)
             elif gobj.__class__.__name__ == 'Family':
                 eventref.set_role(EventRoleType.FAMILY)
                 gobj.add_event_ref(eventref)
                 if attr == 'marriage':
                     gobj.set_relationship(FamilyRelType(FamilyRelType.MARRIED))
-                db.commit_event(event, tran)
-                gobj.add_tag(tag.handle)
-                db.commit_family(gobj, tran)
+                db.commit_event(event,tran)
+                db.commit_family(gobj,tran)
             if verbosity >= 2:
                 print(_("Creating ")+attr+" ("+str(uptype)+") "+_("Event"))
 
@@ -649,7 +611,7 @@ class GBase:
             if verbosity >= 2 and self.__dict__[attr+'date']:
                 print(_("Update ")+attr+_(" Date to ")+self.__dict__[attr+'date'])
             event.set_date_object(date)
-            db.commit_event(event, tran)
+            db.commit_event(event,tran)
 
             if self.__dict__[attr+'place'] \
                 or self.__dict__[attr+'placecode'] :
@@ -657,28 +619,20 @@ class GBase:
                     placename = self.__dict__[attr+'place']
                 else:
                     placename = ""
-                place = self.get_or_create_place(event, placename)
+                place = self.get_or_create_place(event,placename)
                 # TODO: Here we overwrite any existing value.
                 # Check whether that can be a problem
                 place.set_name(PlaceName(value=placename))
                 if self.__dict__[attr+'placecode']:
                     place.set_code(self.__dict__[attr+'placecode'])
-                place_tag = _('place from geneanet')
-                if db.get_tag_from_name(place_tag):
-                    ptag = db.get_tag_from_name(place_tag)
-                else:
-                    ptag = Tag()
-                    ptag.set_name(place_tag)
-                db.add_tag(ptag, tran)
-                place.add_tag(ptag.handle)
-                db.add_place(place, tran)
+                db.add_place(place,tran)
                 event.set_place_handle(place.get_handle())
-                db.commit_event(event, tran)
+                db.commit_event(event,tran)
 
-        db.commit_event(event, tran)
+        db.commit_event(event,tran)
         return
 
-    def get_gramps_date(self, evttype):
+    def get_gramps_date(self,evttype):
         '''
         Give back the date of the event related to the GPerson or GFamily
         as a string ISO formated
@@ -755,7 +709,6 @@ class GFamily(GBase):
         # The 2 GPersons parents in this family should exist
         # and properties filled before we create the family
         # Gramps properties
-        self.title = ""
         self.marriagedate = None
         self.marriageplace = None
         self.marriageplacecode = None
@@ -783,7 +736,7 @@ class GFamily(GBase):
         '''
         with DbTxn("Geneanet import", db) as tran:
             grampsf = Family()
-            db.add_family(grampsf, tran)
+            db.add_family(grampsf,tran)
             self.gid = grampsf.gramps_id
             self.family = grampsf
             if verbosity >= 2:
@@ -854,19 +807,11 @@ class GFamily(GBase):
 
         if idx < len(self.father.spouseref):
             # We found one
-            try:
-                self.g_marriagedate = self.father.marriagedate[idx]
-                self.g_marriageplace = self.father.marriageplace[idx]
-                self.g_marriageplacecode = self.father.marriageplacecode[idx]
-            except:
-                LOG.debug('marriage, father and spouse(%s)' % idx)
-            try:
-                for c in self.father.childref[idx]:
-                    LOG.info(c)
-                    self.g_childref.append(c)
-            except:
-                LOG.debug('child, father and spouse(%s)' % idx)
-            
+            self.g_marriagedate = self.father.marriagedate[idx]
+            self.g_marriageplace = self.father.marriageplace[idx]
+            self.g_marriageplacecode = self.father.marriageplacecode[idx]
+            for c in self.father.childref[idx]:
+                self.g_childref.append(c)
 
         if self.g_marriagedate and self.g_marriageplace and self.g_marriageplacecode:
             if verbosity >= 2:
@@ -937,7 +882,7 @@ class GFamily(GBase):
             # When it's not the case create the family
             if self.family == None:
                 self.family = Family()
-                db.add_family(self.family, tran)
+                db.add_family(self.family,tran)
 
             try:
                 grampsp0 = db.get_person_from_gramps_id(self.father.gid)
@@ -953,9 +898,9 @@ class GFamily(GBase):
                     if verbosity >= 2:
                         print(_("Can't affect father to the family"))
 
-                db.commit_family(self.family, tran)
+                db.commit_family(self.family,tran)
                 grampsp0.add_family_handle(self.family.get_handle())
-                db.commit_person(grampsp0, tran)
+                db.commit_person(grampsp0,tran)
 
             try:
                 grampsp1 = db.get_person_from_gramps_id(self.mother.gid)
@@ -971,13 +916,12 @@ class GFamily(GBase):
                     if verbosity >= 2:
                         print(_("Can't affect mother to the family"))
 
-                db.commit_family(self.family, tran)
+                db.commit_family(self.family,tran)
                 grampsp1.add_family_handle(self.family.get_handle())
-                db.commit_person(grampsp1, tran)
+                db.commit_person(grampsp1,tran)
 
             # Now celebrate the marriage ! (if needed)
-            timelog = _('marriage from Geneanet')
-            self.get_or_create_event(self.family, 'marriage', tran, timelog)
+            self.get_or_create_event(self.family,'marriage',tran)
 
     def smartcopy(self):
         '''
@@ -989,7 +933,7 @@ class GFamily(GBase):
         self._smartcopy("marriageplace")
         self._smartcopy("marriageplacecode")
 
-    def add_child(self, child):
+    def add_child(self,child):
         '''
         Adds a child GPerson child to the GFamily
         '''
@@ -1018,9 +962,9 @@ class GFamily(GBase):
                             print(_("No handle for this child"))
                     self.family.add_child_ref(childref)
                     with DbTxn("Geneanet import", db) as tran:
-                        db.commit_family(self.family, tran)
+                        db.commit_family(self.family,tran)
                         child.grampsp.add_parent_family_handle(self.family.get_handle())
-                        db.commit_person(child.grampsp, tran)
+                        db.commit_person(child.grampsp,tran)
 
     def recurse_children(self,level):
         '''
@@ -1121,8 +1065,6 @@ class GPerson(GBase):
         self.marriageplace = []
         self.marriageplacecode = []
         self.childref = []
-        self.user = "" #storage and privacy issues
-        self.password = "" #storage and privacy issues
 
     def smartcopy(self):
         '''
@@ -1140,7 +1082,7 @@ class GPerson(GBase):
         self._smartcopy("deathplace")
         self._smartcopy("deathplacecode")
 
-    def from_geneanet(self, purl):
+    def from_geneanet(self,purl):
         ''' Use XPath to retrieve the details of a person
         Used example from https://gist.github.com/IanHopkinson/ad45831a2fb73f537a79
         and doc from https://www.w3schools.com/xml/xpath_axes.asp
@@ -1150,74 +1092,30 @@ class GPerson(GBase):
         '''
 
         # Needed as Geneanet returned relative links
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
-        # https://edmundmartin.com
-        from random import choice
- 
-        desktop_agents = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/602.2.14 (KHTML, like Gecko) Version/10.0.1 Safari/602.2.14',
-                 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36',
-                 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36',
-                 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36',
-                 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36',
-                 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0']
- 
-        def random_headers():
-            return {'User-Agent': choice(desktop_agents),'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'}
- 
-        headers = random_headers()
 
         if verbosity >= 3:
             print(_("Purl:"),purl)
         if not purl:
             return()
-        if os.name != 'nt' and sys.platform != 'darwin':
-            import requests # windows os and mac os ?
+        try:
             if verbosity >= 1:
                 print("-----------------------------------------------------------")
-                print(_("Page considered:"), purl)
-            s = requests.session()
-            s.auth = (self.user, self.password)
-            header = s.head(purl)
-            LOG.info('header %s' % header)
-            page = s.get(purl)
-            if page.status_code == "302":
-                LOG.debug('Need to log in?')
-            LOG.info('content %s' % str(page.content))
-            LOG.info('text %s' % page.text)
-            LOG.info('type %s' % page.headers['Content-Type'])
-            LOG.debug('body %s'% page.request.body)
+                print(_("Page considered:"),purl)
+            page = requests.get(purl)
             if verbosity >= 3:
-                print(_("Return code:"), page.status_code)
-            LOG.debug("How to handle HTML page on non linux environments?")
-            print(_("[Requests]: We failed to reach the server at"), purl)
-            LOG.info("Fallback, try via built-in urllib module")
-            if page.ok and page.status_code != "200":
+                print(_("Return code:"),page.status_code)
+        except:
+            print(_("We failed to reach the server at"),purl)
+        else:
+            if page.ok:
                 try:
-                    tree = html.fromstring(str(page.content))
-                    LOG.info(str(page.content))
-                except XMLSyntaxError:
-                    LOG.debug(_("Unable to perform HTML analysis"))
-                    # os.system('''wget "%(url)s"''' % {'url': purl})
-                import urllib.request
-                try:
-                    page = urllib.request.urlopen(purl)
-                except urllib.error.HTTPError:
-                    LOG.debug(purl)
-                tree = html.fromstring(page.read())
-                LOG.info(str(page))
-
-                #from lxml import etree                
-                #find_text = etree.XPath("//text()", smart_strings=False)
-                #LOG.debug(find_text(tree))
-                #LOG.debug((etree.tostring(tree, method='xml', pretty_print=True)))
+                    tree = html.fromstring(page.content)
+                except:
+                    print(_("Unable to perform HTML analysis"))
 
                 self.url = purl
-                self.title = tree.xpath('//title/text()')
-                LOG.debug((purl, self.title))
                 # Wait after a Genanet request to be fair with the site
                 # between 2 and 7 seconds
                 time.sleep(random.randint(2,7))
@@ -1229,50 +1127,44 @@ class GPerson(GBase):
                     if sex[0] == 'H':
                         self.g_sex = 'M'
                 except:
-                    LOG.debug(self.g_sex)
                     self.g_sex = 'U'
                 try:
                     name = tree.xpath('//div[@id="person-title"]//a/text()')
-                    self.g_firstname = str(name[0]).title()
-                    self.g_lastname = str(name[1]).title()
+                    self.g_firstname = str(name[0])
+                    self.g_lastname = str(name[1])
                 except:
-                    LOG.debug(str(name))
-                    self.g_firstname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
+                    self.g_firstname = ""
                     self.g_lastname = ""
                 if verbosity >= 1:
                     print(_("==> GENEANET Name (L%d): %s %s")%(self.level,self.g_firstname,self.g_lastname))
                 if verbosity >= 2:
                     print(_("Sex:"), self.g_sex)
                 try:
-                    bstring = '//li[contains(., "'+_("Born")+'")]/text()'
+                    sstring = '//li[contains(., "'+_("Born")+'")]/text()'
                     if verbosity >= 3:
-                        print("bstring: "+bstring)
-                    birth = tree.xpath(bstring)
-                    LOG.debug(tree.xpath('//div[@id="perso"]//ul/li[0]/text()'))
+                        print("sstring: "+sstring)
+                    birth = tree.xpath(sstring)
                 except:
                     birth = [""]
                 if verbosity >= 3:
                     print(_("birth")+": %s"%(birth))
                 try:
-                    dstring = '//li[contains(., "'+_("Deceased")+'")]/text()'
+                    sstring = '//li[contains(., "'+_("Deceased")+'")]/text()'
                     if verbosity >= 3:
-                        print("dstring: "+dstring)
-                    death = tree.xpath(dstring)
-                    LOG.debug(tree.xpath('//div[@id="perso"]//ul/li[1]/text()'))
+                        print("sstring: "+sstring)
+                    death = tree.xpath(sstring)
                 except:
                     death = [""]
                 if verbosity >= 3:
                     print(_("death")+": %s"%(death))
                 try:
-                    # sometime parents are using circle, sometimes disc !
+                    # sometime parents are using circle, somtimes disc !
                     parents = tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//li[@style="vertical-align:middle;list-style-type:disc" or @style="vertical-align:middle;list-style-type:circle"]')
                 except:
-                    LOG.debug(str(tree.xpath('//ul[not(descendant-or-self::*[@class="fiche_union"])]//')))
                     parents = []
                 try:
                     spouses = tree.xpath('//ul[@class="fiche_union"]/li')
                 except:
-                    LOG.debug(str(tree.xpath('//ul[@class="fiche_union"]/li')))
                     spouses = []
                 try:
                     ld = convert_date(birth[0].split('-')[0].split()[1:])
@@ -1280,23 +1172,18 @@ class GPerson(GBase):
                         print(_("Birth:"), ld)
                     self.g_birthdate = format_ca(ld)
                 except:
-                    LOG.debug('birth %s' % birth)
                     self.g_birthdate = None
                 try:
-                    self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip()).title()
+                    self.g_birthplace = str(' '.join(birth[0].split('-')[1:]).split(',')[0].strip())
                     if verbosity >= 2:
                         print(_("Birth place:"), self.g_birthplace)
                 except:
-                    if len(birth) < 1:
-                        pass
-                    else:
-                        LOG.debug(str(birth[0]))
-                        self.g_birthplace = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
+                    self.g_birthplace = None
                 try:
                     self.g_birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_birthplacecode)
                     if not match:
-                        self.g_birthplacecode = _("no match")
+                        self.g_birthplacecode = None
                     else:
                         if verbosity >= 2:
                             print(_("Birth place code:"), self.g_birthplacecode)
@@ -1308,23 +1195,18 @@ class GPerson(GBase):
                         print(_("Death:"), ld)
                     self.g_deathdate = format_ca(ld)
                 except:
-                    LOG.debug('death %s' % death)
                     self.g_deathdate = None
                 try:
-                    self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip().title()
+                    self.g_deathplace = str(' '.join(death[0].split('-')[1:]).split(',')[0]).strip()
                     if verbosity >= 2:
                         print(_("Death place:"), self.g_deathplace)
                 except:
-                    if len(death) < 1:
-                        pass
-                    else:
-                        LOG.debug(str(death[0]))
-                        self.g_deathplace = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
+                    self.g_deathplace = None
                 try:
                     self.g_deathplacecode = str(' '.join(death[0].split('-')[1:]).split(',')[1]).strip()
                     match = re.search(r'\d\d\d\d\d', self.g_deathplacecode)
                     if not match:
-                        self.g_deathplacecode = _("not match")
+                        self.g_deathplacecode = None
                     else:
                         if verbosity >= 2:
                             print(_("Death place code:"), self.g_deathplacecode)
@@ -1336,134 +1218,97 @@ class GPerson(GBase):
                 sref = []
                 marriage = []
                 for spouse in spouses:
-                    for a in spouse.xpath('a'):
-                        try:
-                            ref = a.xpath('attribute::href')[s]
-                            if verbosity >= 2:
-                                print(_("Spouse %d ref: %s") %(s, ref))
-                        except:
-                            ref = None
-                            LOG.debug(str(a.xpath('attribute::href')))
-                        sosa = a.find('img')
-                        if sosa is None:
-                            try:
-                                sname.append(str(a.xpath('text()')[s]).title())
-                                if verbosity >= 2:
-                                    print(_("Spouse name:"), sname[s])
-                            except:
-                                sname.append("")
-                            try:
-                                sref.append(str(a.xpath('attribute::href')[s]))
-                                if verbosity >= 2:
-                                    print(_("Spouse ref:"), ROOTURL+sref[s])
-                            except:
-                                sref.append("")
-
-                        self.spouseref.append(ROOTURL+sref[s])
                     try:
-                        marriage.append(str(spouse.xpath('em/text()')[s]))
+                        sname.append(str(spouse.xpath('a/text()')[0]))
+                        if verbosity >= 2:
+                            print(_("Spouse name:"), sname[s])
+                    except:
+                        sname.append("")
+
+                    try:
+                        sref.append(str(spouse.xpath('a/attribute::href')[0]))
+                        if verbosity >= 2:
+                            print(_("Spouse ref:"), ROOTURL+sref[s])
+                    except:
+                        sref.append("")
+                    self.spouseref.append(ROOTURL+sref[s])
+
+                    try:
+                        marriage.append(str(spouse.xpath('em/text()')[0]))
                     except:
                         marriage.append(None)
                     try:
-                        ld = convert_date(marriage[s].split(',')[s].split()[1:])
+                        ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if verbosity >= 2:
                             print(_("Married:"), ld)
                         self.marriagedate.append(format_ca(ld))
                     except:
                         self.marriagedate.append(None)
                     try:
-                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]).title())
+                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]))
                         if verbosity >= 2:
                             print(_("Married place:"), self.marriageplace[s])
                     except:
-                        self.marriageplace.append(str(marriage[s]))
+                        self.marriageplace.append(None)
                     try:
                         marriageplacecode = str(marriage[s].split(',')[2][1:])
                         match = re.search(r'\d\d\d\d\d', marriageplacecode)
                         if not match:
-                            self.marriageplacecode.append(str(marriage[s]))
+                            self.marriageplacecode.append(None)
                         else:
                             if verbosity >= 2:
                                 print(_("Married place code:"), self.marriageplacecode[s])
                             self.marriageplacecode.append(marriageplacecode)
                     except:
-                        self.marriageplacecode.append(str(marriage[s]))
+                        self.marriageplacecode.append(None)
 
                     cnum = 0
                     clist = []
                     for c in spouse.xpath('ul/li'):
-                        LOG.info(etree.tostring(c, method='xml', pretty_print=True))
-                        for a in c.xpath('a'):
-                            try:
-                                cref = ROOTURL+str(a.xpath('attribute::href')[cnum])
-                                if verbosity >= 2:
-                                    print(_("Child %d ref: %s") %(cnum, cref))
-                            except:
-                                cref = None
-                                LOG.debug(str(a.xpath('attribute::href')))
-                            sosa = a.find('img')
-                            if sosa is None:
-                                try:
-                                    cname = c.xpath('a/text()')[cnum].title()
-                                    if verbosity >= 2:
-                                        print(_("Child %d name: %s")%(cnum, cname))
-                                except:
-                                    cname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
-                                    LOG.debug(cname)
-                            else:
-                                LOG.info(etree.tostring(c, method='html', pretty_print=False))
-                                LOG.debug('Failed to set children %s' % cnum)
-
-                            clist.append(cref)
+                        try:
+                            cname = c.xpath('a/text()')[0]
+                            if verbosity >= 2:
+                                print(_("Child %d name: %s")%(cnum,cname))
+                        except:
+                            cname = None
+                        try:
+                            cref = ROOTURL+str(c.xpath('a/attribute::href')[0])
+                            if verbosity >= 2:
+                                print(_("Child %d ref: %s")%(cnum,cref))
+                        except:
+                            cref = None
+                        clist.append(cref)
                         cnum = cnum + 1
                     self.childref.append(clist)
                     s = s + 1
                     # End spouse loop
-                    LOG.info('clist %s' % clist)
 
                 self.fref = ""
                 self.mref = ""
                 prefl = []
                 for p in parents:
-                    LOG.info(etree.tostring(p, method='xml', pretty_print=True))
                     if verbosity >= 3:
-                        print('parent text', p.xpath('text()'))
-                    LOG.info(p.text)
-                    for a in p.xpath('a'):
-                        pref = a.xpath('attribute::href')[0]
-                        LOG.debug(pref)
-                    if p.xpath('a'):
-                        for a in p.xpath('a')[0]:
-                            sosa = a.find('img')
-                            if sosa is None:
-                                try:
-                                    pname = a.xpath('text()')[0].title()
-                                    LOG.info(pnane)
-                                except:
-                                    pname = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
-                                    LOG.debug(pname)
-                                    # if pname is ? ? then go to next one
-                                try:
-                                    pref = a.xpath('attribute::href')[0]
-                                    LOG.info(pref)
-                                except:
-                                    LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
-                                    pref = ""
-                            if verbosity >= 1:
-                                print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
-                    else:
-                        LOG.info(etree.tostring(p, method='html', pretty_print=False))
-                        #LOG.debug('Failed to set parents %s' % p.text)
-                    prefl.append(ROOTURL+str(pref))
+                        print(p.xpath('text()'))
+                    if p.xpath('text()')[0] == '\n':
+                        try:
+                            pname = p.xpath('a/text()')[0]
+                        except:
+                            pname = ""
+                            # if pname is ? ? then go to next one
+                        try:
+                            pref = p.xpath('a/attribute::href')[0]
+                        except:
+                            pref = ""
+                        if verbosity >= 1:
+                           print(_("Parent name: %s (%s)")%(pname,ROOTURL+pref))
+                        prefl.append(ROOTURL+str(pref))
                 try:
                     self.fref = prefl[0]
                 except:
-                    LOG.debug('no ref for parent 1')
                     self.fref = ""
                 try:
                     self.mref = prefl[1]
                 except:
-                    LOG.debug('no ref for parent 2')
                     self.mref = ""
                 if verbosity >= 2:
                     print("-----------------------------------------------------------")
@@ -1478,7 +1323,7 @@ class GPerson(GBase):
         '''
         with DbTxn("Geneanet import", db) as tran:
             grampsp = Person()
-            db.add_person(grampsp, tran)
+            db.add_person(grampsp,tran)
             self.gid = grampsp.gramps_id
             self.grampsp = grampsp
             if verbosity >= 1:
@@ -1591,8 +1436,7 @@ class GPerson(GBase):
 
             # We need to create events for Birth and Death
             for ev in ['birth', 'death']:
-                timelog = _('event from Geneanet')
-                self.get_or_create_event(grampsp, ev, tran, timelog)
+                self.get_or_create_event(grampsp,ev,tran)
 
             # Store the importation place as an Internet note
             if self.url != "":
@@ -1603,19 +1447,16 @@ class GPerson(GBase):
                         found = True
                 if not found:
                     url = Url()
-                    try:
-                        url.set_description(str(self.title[0]))
-                    except:
-                        url.set_description(_("Geneanet"))
+                    url.set_description("Imported from Geneanet")
                     url.set_type(UrlType.WEB_HOME)
                     url.set_path(self.url)
                     grampsp.add_url(url)
 
-            db.commit_person(grampsp, tran)
+            db.commit_person(grampsp,tran)
             db.enable_signals()
             db.request_rebuild()
 
-    def from_gramps(self, gid):
+    def from_gramps(self,gid):
         '''
         Fill a GPerson with its Gramps data
         '''
@@ -1641,7 +1482,7 @@ class GPerson(GBase):
                 print(_("Existing Gramps Person: %s")%(self.gid))
         except:
             if verbosity >= 1:
-                print(_("WARNING: Unable to retrieve id %s from the gramps db %s") %(gid, gname))
+                print(_("WARNING: Unable to retrieve id %s from the gramps db %s")%(gid,gname))
 
         if not found:
             # If we don't know who this is, try to find it in Gramps
@@ -1666,7 +1507,7 @@ class GPerson(GBase):
         if name[1]:
             self.lastname = name[0]
         if verbosity >= 2:
-            print(_("===> Gramps Name of %s: %s %s")%(self.gid, self.firstname, self.lastname))
+            print(_("===> Gramps Name of %s: %s %s")%(self.gid,self.firstname,self.lastname))
 
         try:
             bd = self.get_gramps_date(EventType.BIRTH)
@@ -1748,17 +1589,17 @@ class GPerson(GBase):
                     spouse = s
                     break
             if not spouse:
-                spouse = geneanet_to_gramps(None, level, None, self.spouseref[i])
+                spouse = geneanet_to_gramps(None,level,None,self.spouseref[i])
                 if spouse:
                     self.spouse.append(spouse)
                     spouse.spouse.append(self)
                     # Create a GFamily with them and do a Geaneanet to Gramps for it
                     if verbosity >= 2:
-                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" + "+spouse.firstname+" "+spouse.lastname)
+                        print(_("=> Initialize Family of ")+self.firstname+" "+self.lastname+" & "+spouse.firstname+" "+spouse.lastname)
                 if self.sex == 'M':
-                    f = GFamily(self, spouse)
+                    f = GFamily(self,spouse)
                 elif self.sex == 'F':
-                    f = GFamily(spouse, self)
+                    f = GFamily(spouse,self)
                 else:
                     if verbosity >= 1:
                         print(_("Unable to Initialize Family of ")+self.firstname+" "+self.lastname+_(" sex unknown"))
@@ -1785,7 +1626,7 @@ class GPerson(GBase):
             level = level + 1
 
             if self.father:
-                geneanet_to_gramps(self.father, level, self.father.gid, self.fref)
+                geneanet_to_gramps(self.father,level,self.father.gid,self.fref)
                 if self.mother:
                     self.mother.spouse.append(self.father)
 
@@ -1797,7 +1638,7 @@ class GPerson(GBase):
                     print(_("=> End of recursion on the parents of ")+self.father.firstname+" "+self.father.lastname)
 
             if self.mother:
-                geneanet_to_gramps(self.mother, level, self.mother.gid, self.mref)
+                geneanet_to_gramps(self.mother,level,self.mother.gid,self.mref)
                 if self.father:
                     self.father.spouse.append(self.mother)
                 if verbosity >= 2:
@@ -1810,7 +1651,7 @@ class GPerson(GBase):
             # Create a GFamily with them and do a Geaneanet to Gramps for it
             if verbosity >= 2:
                 print(_("=> Initialize Parents Family of ")+self.firstname+" "+self.lastname)
-            f = GFamily(self.father, self.mother)
+            f = GFamily(self.father,self.mother)
             f.from_geneanet()
             f.from_gramps(f.gid)
             f.to_gramps()
@@ -1912,11 +1753,11 @@ def geneanet_to_gramps(p, level, gid, url):
         progress.step()
     return(p)
 
-def g2gaction(gid, purl):
+def g2gaction(gid,purl):
     global progress
 
     # Create the first Person
-    gp = geneanet_to_gramps(None,0, gid, purl)
+    gp = geneanet_to_gramps(None,0,gid,purl)
 
     if gp != None:
         if ascendants:
@@ -2008,7 +1849,7 @@ def main():
         print(_("WARNING: Force mode activated"))
         time.sleep(TIMEOUT)
 
-    g2gaction(gid, purl)
+    g2gaction(gid,purl)
 
     db.close()
     sys.exit(0)
@@ -2016,4 +1857,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
