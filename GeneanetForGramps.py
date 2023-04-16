@@ -1186,6 +1186,7 @@ class GPerson(GBase):
             page = s.get(purl)
             if page.status_code == "302":
                 LOG.debug('Need to log in?')
+                self.connexion(self.user, self.password)
             LOG.info('content %s' % str(page.content))
             LOG.info('text %s' % page.text)
             LOG.info('type %s' % page.headers['Content-Type'])
@@ -1462,6 +1463,39 @@ class GPerson(GBase):
 
             else:
                 print(_("We failed to be ok with the server"))
+                
+    def connexion(self, user, password):
+        '''
+        Login and password set for geneanet servers
+        '''
+        import requests
+
+        headers = {'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' }
+        r = requests.get("https://www.geneanet.org/connexion/"
+             ,headers=headers
+            )
+        
+        pos1 = r.text.find('name="_csrf_token" value="')
+        pos1 = pos1 + len('name="_csrf_token" value="')
+        pos2 = r.text.find('"',pos1)
+        csrf = r.text[pos1:pos2]
+        cooks=r.cookies
+        headers.update({'referer':'https://www.geneanet.org/connexion/'})
+        headers.update({'authority':'www.geneanet.org'})
+        r = requests.post(
+                 "https://www.geneanet.org/connexion/login_check"
+                ,data={
+                      "_username": user
+                     ,"_password": password
+                     ,"_submit": ""
+                     ,"_remember_me": "1"
+                     ,"_csrf_token": csrf
+                     }
+               ,allow_redirects=False
+               ,cookies=cooks
+               ,headers=headers
+             )
+        return(r.text)
 
 
     def create_grampsp(self):
