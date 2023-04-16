@@ -1287,6 +1287,7 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("Birth place:"), self.g_birthplace)
                 except:
+                    LOG.debug(str(birth[0]))
                     self.g_birthplace = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                 try:
                     self.g_birthplacecode = str(' '.join(birth[0].split('-')[1:]).split(',')[1]).strip()
@@ -1311,6 +1312,7 @@ class GPerson(GBase):
                     if verbosity >= 2:
                         print(_("Death place:"), self.g_deathplace)
                 except:
+                    LOG.debug(str(death[0]))
                     self.g_deathplace = str(uuid.uuid3(uuid.NAMESPACE_URL, self.url))
                 try:
                     self.g_deathplacecode = str(' '.join(death[0].split('-')[1:]).split(',')[1]).strip()
