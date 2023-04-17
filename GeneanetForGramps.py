@@ -1487,7 +1487,7 @@ class GPerson(GBase):
         pos1 = pos1 + len('name="_csrf_token" value="')
         pos2 = r.text.find('"', pos1)
         csrf = r.text[pos1:pos2]
-        cooks=r.cookies
+        cooks = r.cookies
         headers.update({'referer':'https://www.geneanet.org/connexion/'})
         headers.update({'authority':'www.geneanet.org'})
         r = requests.post(
