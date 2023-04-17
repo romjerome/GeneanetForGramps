@@ -1503,7 +1503,7 @@ class GPerson(GBase):
                ,cookies=cooks
                ,headers=headers
              )
-        return(r.text)
+        LOG.info(r.text)
 
 
     def create_grampsp(self):
