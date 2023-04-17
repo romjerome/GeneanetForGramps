@@ -1381,13 +1381,13 @@ class GPerson(GBase):
                         marriageplacecode = str(marriage[s].split(',')[2][1:])
                         match = re.search(r'\d\d\d\d\d', marriageplacecode)
                         if not match:
-                            self.marriageplacecode.append(str(marriage[s]))
+                            self.marriageplacecode.append(_("not match"))
                         else:
                             if verbosity >= 2:
                                 print(_("Married place code:"), self.marriageplacecode[s])
                             self.marriageplacecode.append(marriageplacecode)
                     except:
-                        self.marriageplacecode.append(str(marriage[s]))
+                        LOG.debug(str(marriage[s]))
 
                     cnum = 0
                     clist = []
