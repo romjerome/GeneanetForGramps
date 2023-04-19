@@ -1358,7 +1358,7 @@ class GPerson(GBase):
                                     print(_("Spouse ref:"), ROOTURL+sref[s])
                             except:
                                 sref.append("")
-                        if len(spouses) < s + 1:
+                        if len(spouses) == s + 1:
                             self.spouseref.append(ROOTURL+sref[s])
                         else:
                             pass
