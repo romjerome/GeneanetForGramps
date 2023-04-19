@@ -1338,7 +1338,7 @@ class GPerson(GBase):
                 for spouse in spouses:
                     for a in spouse.xpath('a'):
                         try:
-                            ref = a.xpath('attribute::href')[s]
+                            ref = a.xpath('attribute::href')[0]
                             if verbosity >= 2:
                                 print(_("Spouse %d ref: %s") %(s, ref))
                         except:
@@ -1377,7 +1377,7 @@ class GPerson(GBase):
                     try:
                         self.marriageplace.append(str(marriage[0].split(',')[1][1:]).title())
                         if verbosity >= 2:
-                            print(_("Married place:"), self.marriageplace[s])
+                            print(_("Married place:"), self.marriageplace[0])
                     except:
                         self.marriageplace.append(str(marriage[0]))
                     try:
@@ -1387,10 +1387,10 @@ class GPerson(GBase):
                             self.marriageplacecode.append(_("not match"))
                         else:
                             if verbosity >= 2:
-                                print(_("Married place code:"), self.marriageplacecode[s])
+                                print(_("Married place code:"), self.marriageplacecode[0])
                             self.marriageplacecode.append(marriageplacecode)
                     except:
-                        LOG.debug(str(marriage[s]))
+                        LOG.debug(str(marriage[0]))
 
                     cnum = 0
                     clist = []
