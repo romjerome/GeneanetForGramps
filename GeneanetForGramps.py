@@ -1347,13 +1347,13 @@ class GPerson(GBase):
                         sosa = a.find('img')
                         if sosa is None:
                             try:
-                                sname.append(str(a.xpath('text()')[s]).title())
+                                sname.append(str(a.xpath('text()')[0]).title())
                                 if verbosity >= 2:
                                     print(_("Spouse name:"), sname[s])
                             except:
                                 sname.append("")
                             try:
-                                sref.append(str(a.xpath('attribute::href')[s]))
+                                sref.append(str(a.xpath('attribute::href')[0]))
                                 if verbosity >= 2:
                                     print(_("Spouse ref:"), ROOTURL+sref[s])
                             except:
@@ -1364,24 +1364,24 @@ class GPerson(GBase):
                             s = s + 1
                             continue
                     try:
-                        marriage.append(str(spouse.xpath('em/text()')[s]))
+                        marriage.append(str(spouse.xpath('em/text()')[0]))
                     except:
                         marriage.append(None)
                     try:
-                        ld = convert_date(marriage[s].split(',')[s].split()[1:])
+                        ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if verbosity >= 2:
                             print(_("Married:"), ld)
                         self.marriagedate.append(format_ca(ld))
                     except:
                         self.marriagedate.append(None)
                     try:
-                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]).title())
+                        self.marriageplace.append(str(marriage[0].split(',')[1][1:]).title())
                         if verbosity >= 2:
                             print(_("Married place:"), self.marriageplace[s])
                     except:
-                        self.marriageplace.append(str(marriage[s]))
+                        self.marriageplace.append(str(marriage[0]))
                     try:
-                        marriageplacecode = str(marriage[s].split(',')[2][1:])
+                        marriageplacecode = str(marriage[0].split(',')[2][1:])
                         match = re.search(r'\d\d\d\d\d', marriageplacecode)
                         if not match:
                             self.marriageplacecode.append(_("not match"))
