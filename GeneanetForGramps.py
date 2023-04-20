@@ -1196,7 +1196,7 @@ class GPerson(GBase):
             LOG.debug("How to handle HTML page on non linux environments?")
             print(_("[Requests]: We failed to reach the server at"), purl)
             LOG.info("Fallback, try via built-in urllib module")
-            if page.ok and page.status_code != "200":
+            if page.ok and page.status_code != "200" or "201":
                 try:
                     tree = html.fromstring(str(page.content))
                     LOG.info(str(page.content))
@@ -1339,7 +1339,7 @@ class GPerson(GBase):
                 for spouse in spouses:
                     for a in spouse.xpath('a'):
                         try:
-                            ref = a.xpath('attribute::href')[s]
+                            ref = a.xpath('attribute::href')[0]
                             if verbosity >= 2:
                                 print(_("Spouse %d ref: %s") %(s, ref))
                         except:
@@ -1348,47 +1348,49 @@ class GPerson(GBase):
                         sosa = a.find('img')
                         if sosa is None:
                             try:
-                                sname.append(str(a.xpath('text()')[s]).title())
+                                sname.append(str(a.xpath('text()')[0]).title())
                                 if verbosity >= 2:
                                     print(_("Spouse name:"), sname[s])
                             except:
                                 sname.append("")
                             try:
-                                sref.append(str(a.xpath('attribute::href')[s]))
+                                sref.append(str(a.xpath('attribute::href')[0]))
                                 if verbosity >= 2:
                                     print(_("Spouse ref:"), ROOTURL+sref[s])
                             except:
                                 sref.append("")
-
-                        self.spouseref.append(ROOTURL+sref[s])
+                        try:
+                            self.spouseref.append(ROOTURL+sref[s])
+                        except:
+                            continue
                     try:
-                        marriage.append(str(spouse.xpath('em/text()')[s]))
+                        marriage.append(str(spouse.xpath('em/text()')[0]))
                     except:
                         marriage.append(None)
                     try:
-                        ld = convert_date(marriage[s].split(',')[s].split()[1:])
+                        ld = convert_date(marriage[s].split(',')[0].split()[1:])
                         if verbosity >= 2:
                             print(_("Married:"), ld)
                         self.marriagedate.append(format_ca(ld))
                     except:
                         self.marriagedate.append(None)
                     try:
-                        self.marriageplace.append(str(marriage[s].split(',')[1][1:]).title())
+                        self.marriageplace.append(str(marriage[0].split(',')[1][1:]).title())
                         if verbosity >= 2:
-                            print(_("Married place:"), self.marriageplace[s])
+                            print(_("Married place:"), self.marriageplace[0])
                     except:
-                        self.marriageplace.append(str(marriage[s]))
+                        self.marriageplace.append(str(marriage[0]))
                     try:
-                        marriageplacecode = str(marriage[s].split(',')[2][1:])
+                        marriageplacecode = str(marriage[0].split(',')[2][1:])
                         match = re.search(r'\d\d\d\d\d', marriageplacecode)
                         if not match:
                             self.marriageplacecode.append(_("not match"))
                         else:
                             if verbosity >= 2:
-                                print(_("Married place code:"), self.marriageplacecode[s])
+                                print(_("Married place code:"), self.marriageplacecode[0])
                             self.marriageplacecode.append(marriageplacecode)
                     except:
-                        LOG.debug(str(marriage[s]))
+                        LOG.debug(str(marriage[0]))
 
                     cnum = 0
                     clist = []
