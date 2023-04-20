@@ -1358,10 +1358,9 @@ class GPerson(GBase):
                                     print(_("Spouse ref:"), ROOTURL+sref[s])
                             except:
                                 sref.append("")
-                        if len(spouses) == s + 1:
+                        try:
                             self.spouseref.append(ROOTURL+sref[s])
-                        else:
-                            s = s + 1
+                        except:
                             continue
                     try:
                         marriage.append(str(spouse.xpath('em/text()')[0]))
