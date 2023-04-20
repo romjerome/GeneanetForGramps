@@ -1195,7 +1195,7 @@ class GPerson(GBase):
             LOG.debug("How to handle HTML page on non linux environments?")
             print(_("[Requests]: We failed to reach the server at"), purl)
             LOG.info("Fallback, try via built-in urllib module")
-            if page.ok and page.status_code != "200":
+            if page.ok and page.status_code != "200" or "201":
                 try:
                     tree = html.fromstring(str(page.content))
                     LOG.info(str(page.content))
