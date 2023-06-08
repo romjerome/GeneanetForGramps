@@ -105,6 +105,7 @@ descendants = False
 spouses = False
 LEVEL = 2
 ROOTURL = 'https://gw.geneanet.org/'
+PROFIL = None
 GUIMODE = False
 progress = None
 
@@ -348,7 +349,7 @@ class GeneanetForGramps(PluginWindows.ToolManagedWindowBatch):
             print(_("Plugin run"))
         db = self.dbstate.db
         self.__get_menu_options()
-        hdr = _('Importing from %s for user %s') % (self.purl,self.gid)
+        hdr = _('Importing from %s for user %s') % (self.purl, self.gid)
         msg = _('Geneanet Import into Gramps')
         progress = ProgressMeter(msg, hdr)
         #progress = ProgressMeter(msg, hdr, False, None, True, None)
@@ -356,7 +357,7 @@ class GeneanetForGramps(PluginWindows.ToolManagedWindowBatch):
         if verbosity >= 2:
             print(msg)
         GUIMODE = True
-        g2gaction(self.gid,self.purl)
+        g2gaction(self.gid, self.purl)
 
     def __get_menu_options(self):
         """
@@ -1356,11 +1357,11 @@ class GPerson(GBase):
                             try:
                                 sref.append(str(a.xpath('attribute::href')[0]))
                                 if verbosity >= 2:
-                                    print(_("Spouse ref:"), ROOTURL+sref[s])
+                                    print(_("Spouse ref:"), purl+sref[s])
                             except:
                                 sref.append("")
                         try:
-                            self.spouseref.append(ROOTURL+sref[s])
+                            self.spouseref.append(purl+sref[s])
                         except:
                             continue
                     try:
@@ -1398,7 +1399,7 @@ class GPerson(GBase):
                         LOG.info(etree.tostring(c, method='xml', pretty_print=True))
                         for a in c.xpath('a'):
                             try:
-                                cref = ROOTURL+str(a.xpath('attribute::href')[cnum])
+                                cref = purl+str(a.xpath('attribute::href')[cnum])
                                 if verbosity >= 2:
                                     print(_("Child %d ref: %s") %(cnum, cref))
                             except:
@@ -1453,11 +1454,11 @@ class GPerson(GBase):
                                     LOG.debug(etree.tostring(a, method='xml', pretty_print=True))
                                     pref = ""
                             if verbosity >= 1:
-                                print(_("Parent name: %s (%s)") %(pname, ROOTURL+pref))
+                                print(_("Parent name: %s (%s)") %(pname, purl+pref))
                     else:
                         LOG.info(etree.tostring(p, method='html', pretty_print=False))
                         #LOG.debug('Failed to set parents %s' % p.text)
-                    prefl.append(ROOTURL+str(pref))
+                    prefl.append(purl+str(pref))
                 try:
                     self.fref = prefl[0]
                 except:
